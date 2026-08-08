@@ -60,11 +60,11 @@ you only need to enable it once.
 | Command | Effect |
 | --- | --- |
 | `/tts on` | Enable automatic speech after completed responses |
-| `/tts off` | Disable future automatic speech and stop current playback |
+| `/tts off` | Disable future automatic speech, stop current playback, and clear the queue |
 | `/tts summary` | Speak only the first prose paragraph (default) |
 | `/tts full` | Speak the entire cleaned response |
 | `/tts replay` | Replay the latest response for the current working directory |
-| `/tts stop` | Stop current playback |
+| `/tts stop` | Stop current playback and clear the queue |
 | `/tts preview` | Print exactly what would be spoken, including voice assignments, without playing audio |
 | `/tts voice prose <name>` | Select the voice used for normal prose |
 | `/tts voice header <name>` | Select a second voice for headings and blockquotes |
@@ -194,8 +194,9 @@ right audio channel:
 - `replay` is used by `/tts replay`. A replay is not cancelled by the automatic
   `Stop` event caused by the replay command's own turn.
 
-`/tts stop` and `/tts off` currently act globally when stopping active
-playback. They do not clear jobs that were already queued by other sessions.
+`/tts stop` and `/tts off` currently act globally: they interrupt whatever is
+playing, regardless of which session started it, and clear the entire pending
+queue across all sessions.
 
 ## Text transforms
 
