@@ -1,9 +1,10 @@
 """Shared test setup: put the package on the path and isolate the data dir.
 
 Every test runs against a throwaway data dir (patched directly onto
-``config.data_dir``, not via ``$CLAUDE_PLUGIN_DATA`` - production code no
-longer reads that env var; see config.py for why) so tests never touch the
-user's real config, socket, or daemon.
+``config.data_dir``) so tests never touch the user's real config, socket, or
+daemon. Production resolves the dir via ``~/.agent-tts``, legacy Claude path
+fallback, or ``AGENT_TTS_DATA_DIR`` - never ``$CLAUDE_PLUGIN_DATA`` (see
+config.py).
 """
 
 import os

@@ -1,9 +1,10 @@
 """Stop-hook entrypoint.
 
 Runs after every turn. It is deliberately dumb and fast: it does NOT read the
-response text itself, just signals the daemon to speak this turn on the auto
-channel, then exits 0 so it never blocks Claude. All failures are swallowed -
-a broken TTS setup must not break turns.
+response text itself, just maps the Claude Stop payload through the adapter and
+signals the daemon to speak this turn on the auto channel, then exits 0 so it
+never blocks Claude. All failures are swallowed - a broken TTS setup must not
+break turns.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tts_reader import client, config  # noqa: E402
+from tts_reader.adapters.claude import from_stop_payload  # noqa: E402
 from tts_reader.daemon import AUTO  # noqa: E402
 
 
@@ -35,14 +37,10 @@ def main() -> None:
         config.debug_log("hook_skip_disabled", session_id=payload.get("session_id"))
         return  # opt-in: silent until `/tts on`
 
-    req = {
-        "type": "speak",
-        "channel": AUTO,
-        "session_id": payload.get("session_id", "?"),
-        "transcript_path": payload.get("transcript_path", ""),
-        "cwd": payload.get("cwd", os.getcwd()),
-        "mode": cfg.get("mode", "summary"),
-    }
+    speak = from_stop_payload(
+        payload, mode=cfg.get("mode", "summary"), channel=AUTO
+    )
+    req = speak.to_daemon_req()
     resp = client.send(req)
     config.debug_log(
         "hook_sent",

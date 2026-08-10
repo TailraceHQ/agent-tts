@@ -1,8 +1,9 @@
 """Config + data-directory paths for the TTS plugin.
 
-Everything lives under a single fixed data dir: ``~/.claude/claude-code-tts``.
-That dir holds the JSON config, the daemon's control socket, its pid file, and
-its log.
+Canonical data dir is ``~/.agent-tts`` (shared across hosts). Override with
+``AGENT_TTS_DATA_DIR``. If the canonical dir is missing but the legacy Claude
+path ``~/.claude/claude-code-tts`` still exists, that legacy dir is used so
+existing config and daemon state stay coherent.
 
 This deliberately does NOT use ``$CLAUDE_PLUGIN_DATA``: Claude Code only
 injects that env var into hook subprocesses, not into the inline ``!`` bash
@@ -15,6 +16,7 @@ motivated pinning this to one path both entry points can agree on.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 DEFAULT_CONFIG = {
@@ -32,9 +34,28 @@ DEFAULT_CONFIG = {
     },
 }
 
+DATA_DIR_ENV = "AGENT_TTS_DATA_DIR"
+CANONICAL_DIRNAME = ".agent-tts"
+LEGACY_RELATIVE = (".claude", "claude-code-tts")
+
 
 def data_dir() -> Path:
-    d = Path.home() / ".claude" / "claude-code-tts"
+    """Resolve the shared plugin data directory (hook and CLI must agree)."""
+    override = os.environ.get(DATA_DIR_ENV)
+    if override:
+        d = Path(override).expanduser()
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    home = Path.home()
+    canonical = home / CANONICAL_DIRNAME
+    legacy = home.joinpath(*LEGACY_RELATIVE)
+    # Prefer the new shared dir; keep using legacy if it's the only one present
+    # so existing config.json / daemon.port stay where they already are.
+    if canonical.exists() or not legacy.exists():
+        d = canonical
+    else:
+        d = legacy
     d.mkdir(parents=True, exist_ok=True)
     return d
 

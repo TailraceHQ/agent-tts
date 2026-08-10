@@ -138,7 +138,7 @@ operating system's built-in engine, or force `macos` / `windows` / `linux` /
 Configuration and daemon state are stored under:
 
 ```text
-~/.claude/claude-code-tts/
+~/.agent-tts/
   config.json
   daemon.log
   daemon.pid
@@ -147,14 +147,21 @@ Configuration and daemon state are stored under:
   audio/          synthesized clips (cloud backend only; auto-pruned)
 ```
 
-This path is fixed rather than derived from `$CLAUDE_PLUGIN_DATA`: Claude Code
-only injects that env var into hook subprocesses, not into the inline `!` bash
-that runs the `/tts` command. Keying config off it split state across two
-directories and silently broke automatic playback - `/tts on` set `enabled`
-in one directory while the `Stop` hook read `enabled` from another, empty one.
-Pinning both entry points to the same fixed path keeps them in sync. The
-daemon exits after 30 minutes without queued or active work and starts again
-automatically when needed.
+Override with `AGENT_TTS_DATA_DIR` if needed. If `~/.agent-tts` does not exist
+but the legacy Claude path `~/.claude/claude-code-tts` does, that legacy
+directory is kept so existing settings and a running daemon stay coherent.
+Fresh installs use `~/.agent-tts`.
+
+This path is shared by the Stop hook and `/tts` CLI rather than derived from
+`$CLAUDE_PLUGIN_DATA`: Claude Code only injects that env var into hook
+subprocesses, not into the inline `!` bash that runs the `/tts` command.
+Keying config off it split state across two directories and silently broke
+automatic playback. Pinning both entry points to the same resolved path keeps
+them in sync. The daemon exits after 30 minutes without queued or active work
+and starts again automatically when needed.
+
+The core is host-agnostic (shared daemon + adapters); only the Claude Code
+plugin packaging is wired today. See [docs/multi-host.md](docs/multi-host.md).
 
 ## Voice quality (macOS)
 
@@ -317,7 +324,9 @@ running daemon. It exits automatically after 30 idle minutes. To apply daemon
 code changes immediately, stop it after playback has finished:
 
 ```bash
-data_dir="$HOME/.claude/claude-code-tts"
+data_dir="${AGENT_TTS_DATA_DIR:-$HOME/.agent-tts}"
+# legacy Claude path, if you have not migrated yet:
+# data_dir="$HOME/.claude/claude-code-tts"
 test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
 ```
 
@@ -332,7 +341,8 @@ The next response starts the updated daemon automatically.
 4. Stop the detached daemon so previously queued responses cannot continue:
 
    ```bash
-   data_dir="$HOME/.claude/claude-code-tts"
+   data_dir="${AGENT_TTS_DATA_DIR:-$HOME/.agent-tts}"
+   # or: data_dir="$HOME/.claude/claude-code-tts"
    test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
    ```
 
@@ -370,8 +380,8 @@ claude --plugin-dir "$PWD"
 
 Then run `/tts on`, ask Claude a question, and use `/tts preview`, `/tts status`,
 and `/tts replay` to inspect the result. Runtime logs are in
-`~/.claude/claude-code-tts/daemon.log` (and `debug.log` for hook/daemon
-tracing).
+`~/.agent-tts/daemon.log` (or the legacy `~/.claude/claude-code-tts/` path),
+plus `debug.log` for hook/daemon tracing.
 
 Project layout:
 
@@ -379,10 +389,12 @@ Project layout:
 .claude-plugin/plugin.json   Plugin manifest
 hooks/hooks.json             Stop hook registration
 commands/tts.md              /tts slash command
+docs/multi-host.md           Multi-host decisions (Cursor / Antigravity)
 scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
 scripts/tts_reader/
+  adapters/                  Host Stop-payload → SpeakRequest mappers
   sanitize.py                Markdown to utterance queue
-  transcript.py              Final assistant-message polling
+  transcript.py              Final assistant-message polling (Claude JSONL)
   engine/                    Pluggable speech backends + factory
     base.py                    Backend interface
     macos.py                   macOS `say`
@@ -392,7 +404,7 @@ scripts/tts_reader/
     player.py                  Cross-platform audio-file player (cloud)
   daemon.py                  Queue, channels, and session arbitration
   client.py                  Daemon startup and loopback-TCP client
-  hook.py                    Stop-hook entry point
+  hook.py                    Claude Stop-hook entry point
   cli.py                     /tts command dispatcher
   config.py                  Configuration and data paths
 tests/                       Unit tests (no audio required)
