@@ -68,6 +68,38 @@ def test_replay_without_transcript(monkeypatch, capsys):
     assert "nothing to replay" in capsys.readouterr().out.lower()
 
 
+def test_replay_full_overrides_configured_mode(monkeypatch, captured_sends):
+    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+                        lambda cwd: "/fake/session.jsonl")
+    config.set_values(mode="summary")
+    cli.main(["replay", "full"])
+    assert captured_sends[-1]["mode"] == "full"
+
+
+def test_replay_summary_overrides_configured_mode(monkeypatch, captured_sends):
+    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+                        lambda cwd: "/fake/session.jsonl")
+    config.set_values(mode="full")
+    cli.main(["replay", "summary"])
+    assert captured_sends[-1]["mode"] == "summary"
+
+
+def test_replay_defaults_to_configured_mode_without_args(monkeypatch, captured_sends):
+    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+                        lambda cwd: "/fake/session.jsonl")
+    config.set_values(mode="full")
+    cli.main(["replay"])
+    assert captured_sends[-1]["mode"] == "full"
+
+
+def test_replay_rejects_bad_mode_arg(monkeypatch, capsys, captured_sends):
+    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+                        lambda cwd: "/fake/session.jsonl")
+    cli.main(["replay", "loud"])
+    assert "usage" in capsys.readouterr().out.lower()
+    assert captured_sends == []
+
+
 def test_stop_sends_stop_request(captured_sends):
     cli.main(["stop"])
     assert captured_sends[-1]["type"] == "stop"
@@ -94,3 +126,22 @@ def test_unknown_subcommand(capsys):
 def test_no_args_prints_usage(capsys):
     cli.main([])
     assert "usage" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("argv", [
+    ["on"], ["off"], ["summary"], ["full"], ["stop"], ["status"],
+    ["wpm", "180"], ["voice", "prose", "Alex"],
+])
+def test_every_command_marks_suppression(argv, capsys):
+    """Regression test: a /tts command's own confirmation text (e.g. "TTS
+    enabled.") must not also be auto-spoken by the Stop hook of that same
+    relay turn - that's what stacked with the actual replay audio and made a
+    single /tts replay audibly play multiple times.
+    """
+    cli.main(argv)
+    assert config.consume_command_suppression() is True
+
+
+def test_unknown_subcommand_does_not_mark_suppression(capsys):
+    cli.main(["frobnicate"])
+    assert config.consume_command_suppression() is False

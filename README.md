@@ -1,5 +1,9 @@
 # claude-code-tts
 
+[![License: MIT](https://img.shields.io/github/license/TailraceHQ/claude-code-tts)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/TailraceHQ/claude-code-tts/total)](https://github.com/TailraceHQ/claude-code-tts/releases)
+[![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/claude-code-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/claude-code-tts/actions/workflows/test.yml)
+
 A macOS plugin that reads Claude Code's completed responses aloud. It cleans up
 Markdown before speaking, can use different voices for prose and headings, and
 coordinates playback across multiple Claude Code sessions so they do not talk
@@ -63,7 +67,7 @@ you only need to enable it once.
 | `/tts off` | Disable future automatic speech, stop current playback, and clear the queue |
 | `/tts summary` | Speak only the first prose paragraph (default) |
 | `/tts full` | Speak the entire cleaned response |
-| `/tts replay` | Replay the latest response for the current working directory |
+| `/tts replay [full\|summary]` | Replay the latest response for the current working directory, optionally overriding the configured mode for just this replay |
 | `/tts stop` | Stop current playback and clear the queue |
 | `/tts preview` | Print exactly what would be spoken, including voice assignments, without playing audio |
 | `/tts voice prose <name>` | Select the voice used for normal prose |
@@ -105,16 +109,22 @@ in `config.json` when you need to return to these defaults.
 Configuration and daemon state are stored under:
 
 ```text
-$CLAUDE_PLUGIN_DATA/
+~/.claude/claude-code-tts/
   config.json
   daemon.log
   daemon.pid
   daemon.sock
+  debug.log
 ```
 
-When `CLAUDE_PLUGIN_DATA` is not set, the fallback is
-`~/.claude/claude-code-tts`. The daemon exits after 30 minutes without queued or
-active work and starts again automatically when needed.
+This path is fixed rather than derived from `$CLAUDE_PLUGIN_DATA`: Claude Code
+only injects that env var into hook subprocesses, not into the inline `!` bash
+that runs the `/tts` command. Keying config off it split state across two
+directories and silently broke automatic playback - `/tts on` set `enabled`
+in one directory while the `Stop` hook read `enabled` from another, empty one.
+Pinning both entry points to the same fixed path keeps them in sync. The
+daemon exits after 30 minutes without queued or active work and starts again
+automatically when needed.
 
 ## Voice quality
 
@@ -149,14 +159,16 @@ prose and header roles is not supported.
 
 ## How it works
 
-Claude Code runs the plugin's `Stop` hook after a turn. The transcript may not
-yet contain the final assistant message at that instant, so the hook only sends
-a small job to a background player daemon. The daemon polls the transcript for
-up to three seconds, extracts the newest assistant text, converts it into an
-utterance queue, and invokes `say` once per utterance.
+Claude Code runs the plugin's `Stop` hook after a turn. The hook itself does
+not read the transcript - it just signals a background player daemon, which
+does the (slightly slower) work of reading the transcript, converting it into
+an utterance queue, and invoking `say` once per utterance. That split keeps
+the hook fast so it never delays the turn from returning control to you.
 
-This delay avoids reading the previous answer or an early “let me check that”
-message written before tool calls complete.
+By the time the hook fires, the turn's final assistant message is already on
+disk, so the daemon normally finds it on the very first read. If the
+transcript write is still lagging for some reason, the daemon polls for up to
+three seconds before giving up rather than speaking nothing.
 
 Before playback, the sanitizer:
 
@@ -193,6 +205,12 @@ right audio channel:
   from the same session.
 - `replay` is used by `/tts replay`. A replay is not cancelled by the automatic
   `Stop` event caused by the replay command's own turn.
+
+Every `/tts` command's own echoed confirmation text (e.g. "Replaying last
+response.", "TTS enabled.") is excluded from the `auto` channel - it is
+plugin meta-output, not a Claude response, and for `/tts replay` in
+particular auto-speaking it on top of the actual replay is what used to make
+a single replay audibly play more than once.
 
 `/tts stop` and `/tts off` currently act globally: they interrupt whatever is
 playing, regardless of which session started it, and clear the entire pending
@@ -232,7 +250,7 @@ running daemon. It exits automatically after 30 idle minutes. To apply daemon
 code changes immediately, stop it after playback has finished:
 
 ```bash
-data_dir="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/claude-code-tts}"
+data_dir="$HOME/.claude/claude-code-tts"
 test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
 ```
 
@@ -247,7 +265,7 @@ The next response starts the updated daemon automatically.
 4. Stop the detached daemon so previously queued responses cannot continue:
 
    ```bash
-   data_dir="${CLAUDE_PLUGIN_DATA:-$HOME/.claude/claude-code-tts}"
+   data_dir="$HOME/.claude/claude-code-tts"
    test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
    ```
 
@@ -262,9 +280,6 @@ The next response starts the updated daemon automatically.
    ```bash
    rm -rf "$data_dir"
    ```
-
-If Claude Code supplied a custom `CLAUDE_PLUGIN_DATA` directory, remove that
-plugin data directory instead of the fallback path.
 
 ## Development
 
@@ -288,7 +303,8 @@ claude --plugin-dir "$PWD"
 
 Then run `/tts on`, ask Claude a question, and use `/tts preview`, `/tts status`,
 and `/tts replay` to inspect the result. Runtime logs are in
-`$CLAUDE_PLUGIN_DATA/daemon.log` or the fallback data directory.
+`~/.claude/claude-code-tts/daemon.log` (and `debug.log` for hook/daemon
+tracing).
 
 Project layout:
 
@@ -319,7 +335,7 @@ tests/                       Unit tests (no audio required)
   newest transcript for the current working directory. Multiple sessions in
   the same directory can make that selection ambiguous.
 - If the final transcript message is delayed by more than three seconds, the
-  daemon falls back to the newest assistant text it can find, which may be stale.
+  daemon gives up on that job silently rather than speaking anything.
 - All sessions sharing the data directory share one configuration and one
   playback queue. There are no per-session voices, rates, or enable switches.
 - `/tts stop` and `/tts off` interrupt the active job but do not empty the

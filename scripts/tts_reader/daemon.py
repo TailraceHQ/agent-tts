@@ -27,7 +27,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -37,6 +37,29 @@ from tts_reader.sanitize import HEADER, PROSE, sanitize  # noqa: E402
 AUTO = "auto"
 REPLAY = "replay"
 IDLE_TIMEOUT = 30 * 60  # seconds with no work before the daemon exits
+VOICE_SWITCH_PAUSE = 0.08  # seconds; see _group_by_voice
+
+
+def _group_by_voice(utterances, prose_voice, header_voice):
+    """Merge consecutive utterances using the same resolved voice into one
+    ``say`` call each, joined by newlines.
+
+    Spawning a separate ``say`` subprocess per utterance and waiting for each
+    to exit before starting the next leaves a small gap where the trailing
+    syllable of one utterance can get clipped as the next process's audio
+    device handoff happens - audible as every line/utterance boundary
+    swallowing its last syllable. Since ``say`` already paces sentences
+    naturally within one invocation, batching same-voice runs removes that
+    boundary for the common case (consecutive prose or list items).
+    """
+    groups: List[Tuple[object, List[str]]] = []
+    for utt in utterances:
+        voice = header_voice if utt.voice == HEADER else prose_voice
+        if groups and groups[-1][0] == voice:
+            groups[-1][1].append(utt.text)
+        else:
+            groups.append((voice, [utt.text]))
+    return [(voice, "\n".join(texts)) for voice, texts in groups]
 
 
 @dataclass
@@ -46,7 +69,6 @@ class Job:
     transcript_path: str
     cwd: str
     mode: str
-    request_ts: float
     seq: int = field(default=0)
 
 
@@ -73,18 +95,30 @@ class Daemon:
 
             if job.channel == AUTO:
                 # "you moved on": discard this session's queued auto work
+                dropped = [
+                    j for j in self.pending
+                    if j.channel == AUTO and j.session_id == job.session_id
+                ]
                 self.pending = deque(
                     j for j in self.pending
                     if not (j.channel == AUTO and j.session_id == job.session_id)
                 )
                 # interrupt only our *own* auto playback, never a replay or
                 # another session's audio
-                if (
+                interrupted = bool(
                     self.active
                     and self.active.channel == AUTO
                     and self.active.session_id == job.session_id
-                ):
+                )
+                if interrupted:
                     self._kill_active_locked()
+                if dropped or interrupted:
+                    config.debug_log(
+                        "submit_superseded",
+                        session_id=job.session_id,
+                        dropped_pending=len(dropped),
+                        interrupted_active=interrupted,
+                    )
 
             self.pending.append(job)
             self.cv.notify()
@@ -122,8 +156,14 @@ class Daemon:
             self.active_proc = None
 
     def _play(self, job: Job) -> None:
-        text = transcript.read_final_text(job.transcript_path, job.request_ts)
+        text = transcript.read_final_text(job.transcript_path)
         if not text:
+            config.debug_log(
+                "play_no_text",
+                session_id=job.session_id,
+                channel=job.channel,
+                transcript_path=job.transcript_path,
+            )
             return
         cfg = config.load_config()
         prose_voice = cfg.get("prose_voice")
@@ -132,7 +172,16 @@ class Daemon:
 
         utterances = sanitize(text, job.mode)
         if not utterances:
+            config.debug_log(
+                "play_no_utterances", session_id=job.session_id, channel=job.channel
+            )
             return
+        config.debug_log(
+            "play_start",
+            session_id=job.session_id,
+            channel=job.channel,
+            utterance_count=len(utterances),
+        )
 
         # announce a change of speaker so you always know which window is talking
         announce = None
@@ -143,13 +192,17 @@ class Daemon:
                 announce = f"{label} speaking."
         if announce:
             self._speak_blocking(announce, prose_voice, wpm)
+            time.sleep(VOICE_SWITCH_PAUSE)  # let the announcement's audio drain
 
-        for utt in utterances:
+        for i, (voice, group_text) in enumerate(
+            _group_by_voice(utterances, prose_voice, header_voice)
+        ):
             with self.lock:
                 if self.abort_active:
                     break
-            voice = header_voice if utt.voice == HEADER else prose_voice
-            self._speak_blocking(utt.text, voice, wpm)
+            if i > 0:
+                time.sleep(VOICE_SWITCH_PAUSE)  # let the prior group's audio drain
+            self._speak_blocking(group_text, voice, wpm)
 
     def player_loop(self) -> None:
         while True:
@@ -188,7 +241,6 @@ class Daemon:
                 transcript_path=req.get("transcript_path", ""),
                 cwd=req.get("cwd", ""),
                 mode=req.get("mode", "summary"),
-                request_ts=float(req.get("request_ts", 0.0)),
             ))
             return {"ok": True, "queued": True}
         if t == "stop":

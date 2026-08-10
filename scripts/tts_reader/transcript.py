@@ -89,24 +89,30 @@ def _scan_final(path: str) -> Tuple[Optional[str], float]:
 
 
 def read_final_text(
-    path: str, request_ts: float = 0.0, timeout: float = 3.0, poll: float = 0.15
+    path: str, timeout: float = 3.0, poll: float = 0.15
 ) -> Optional[str]:
     """Poll ``path`` until the turn's final assistant text is present.
 
-    If ``request_ts`` is given, wait for an assistant entry at least that fresh
-    so we don't read the previous turn. Falls back to whatever final text is
-    present once ``timeout`` elapses.
+    By the time the Stop hook fires, the turn's own text is already flushed
+    to disk - ``_scan_final`` reads to the true end of the (append-only) file,
+    so the first scan already returns this turn's answer, not a stale one.
+    The poll loop exists only for the rare case where the transcript write is
+    still lagging: keep checking until *some* assistant text shows up, capped
+    by ``timeout``.
+
+    (An earlier version gated on ``entry_timestamp >= request_ts``, a
+    timestamp captured by the caller *after* the entry was already written -
+    an ordering that can never hold, so every call burned the full timeout
+    before falling back to the very text it found on the first scan. That
+    added a needless ~3s of dead air before every response.)
     """
     if not path or not Path(path).exists():
         return None
     deadline = time.time() + timeout
-    last_seen = None
     while True:
-        text, ts = _scan_final(path)
-        last_seen = text if text else last_seen
-        fresh_enough = ts >= request_ts if request_ts else True
-        if text and fresh_enough:
+        text, _ts = _scan_final(path)
+        if text:
             return text
         if time.time() >= deadline:
-            return last_seen
+            return None
         time.sleep(poll)

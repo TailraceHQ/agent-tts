@@ -15,7 +15,7 @@ from tts_reader import config
 from tts_reader import daemon as D
 from tts_reader import engine, transcript
 import tts_reader.daemon as dmod
-from tts_reader.sanitize import PROSE, Utterance
+from tts_reader.sanitize import HEADER, PROSE, Utterance
 
 
 class FakeProc:
@@ -38,8 +38,13 @@ class FakeProc:
 
 @pytest.fixture
 def harness(monkeypatch):
+    # Distinct prose/header voices so the 3 stubbed utterances below - which
+    # alternate voice - stay as 3 separate `say` calls instead of merging
+    # into one (see _group_by_voice). These tests are about queue/session
+    # arbitration, not grouping, so they need per-utterance granularity;
+    # grouping itself is covered separately in TestGroupByVoice.
     config.save_config({"enabled": True, "mode": "full", "prose_voice": None,
-                        "header_voice": None, "wpm": 175})
+                        "header_voice": "Header", "wpm": 175})
     spoken = []          # (session_id, text) in actual playback order
     lock = threading.Lock()
     current = {"sid": None}
@@ -51,10 +56,10 @@ def harness(monkeypatch):
 
     monkeypatch.setattr(engine, "speak", fake_speak)
     # the "transcript_path" carries the response text in these tests
-    monkeypatch.setattr(transcript, "read_final_text",
-                        lambda path, request_ts=0.0, timeout=3.0, poll=0.15: path)
-    monkeypatch.setattr(dmod, "sanitize",
-                        lambda text, mode: [Utterance(PROSE, f"{text}-{i}") for i in range(3)])
+    monkeypatch.setattr(transcript, "read_final_text", lambda path, **_: path)
+    monkeypatch.setattr(dmod, "sanitize", lambda text, mode: [
+        Utterance(PROSE if i % 2 == 0 else HEADER, f"{text}-{i}") for i in range(3)
+    ])
 
     d = D.Daemon()
     orig_play = d._play
@@ -72,9 +77,9 @@ def harness(monkeypatch):
         d.cv.notify_all()
 
 
-def _job(sid, channel, text, ts=0.0):
+def _job(sid, channel, text):
     return D.Job(session_id=sid, channel=channel, transcript_path=text,
-                 cwd="/w/" + sid, mode="full", request_ts=ts)
+                 cwd="/w/" + sid, mode="full")
 
 
 def _settle(spoken, quiet=0.4, limit=4.0):
@@ -92,9 +97,9 @@ def _settle(spoken, quiet=0.4, limit=4.0):
 
 def test_newer_auto_interrupts_own_older_auto(harness):
     d, spoken = harness
-    d.submit(_job("S", D.AUTO, "old", 1))
+    d.submit(_job("S", D.AUTO, "old"))
     time.sleep(0.1)
-    d.submit(_job("S", D.AUTO, "new", 2))
+    d.submit(_job("S", D.AUTO, "new"))
     _settle(spoken)
     texts = [t for _, t in spoken]
     assert any(t.startswith("new") for t in texts), "newer response must play"
@@ -103,9 +108,9 @@ def test_newer_auto_interrupts_own_older_auto(harness):
 
 def test_other_session_queues_never_interleaves(harness):
     d, spoken = harness
-    d.submit(_job("A", D.AUTO, "aaa", 1))
+    d.submit(_job("A", D.AUTO, "aaa"))
     time.sleep(0.05)
-    d.submit(_job("B", D.AUTO, "bbb", 1))
+    d.submit(_job("B", D.AUTO, "bbb"))
     _settle(spoken)
     order = [s for s, _ in spoken]
     assert "A" in order and "B" in order
@@ -118,9 +123,9 @@ def test_replay_survives_following_same_session_auto(harness):
     d, spoken = harness
     # This is the /tts replay scenario: the replay starts, then the Stop hook
     # for that very turn fires an auto request from the same session.
-    d.submit(_job("S", D.REPLAY, "REPLAY", 0))
+    d.submit(_job("S", D.REPLAY, "REPLAY"))
     time.sleep(0.1)
-    d.submit(_job("S", D.AUTO, "autospeech", 9))
+    d.submit(_job("S", D.AUTO, "autospeech"))
     _settle(spoken)
     texts = [t for _, t in spoken]
     assert sum(t.startswith("REPLAY") for t in texts) == 3, "replay must play in full"
@@ -129,9 +134,9 @@ def test_replay_survives_following_same_session_auto(harness):
 
 def test_stop_interrupts_and_clears_session_queue(harness):
     d, spoken = harness
-    d.submit(_job("S", D.AUTO, "one", 1))
-    d.submit(_job("S", D.AUTO, "two", 2))  # 'one' cancels this per arbitration...
-    d.submit(_job("S", D.AUTO, "three", 3))
+    d.submit(_job("S", D.AUTO, "one"))
+    d.submit(_job("S", D.AUTO, "two"))  # 'one' cancels this per arbitration...
+    d.submit(_job("S", D.AUTO, "three"))
     time.sleep(0.1)
     d.stop("S")
     _settle(spoken)
@@ -143,17 +148,17 @@ def test_stop_interrupts_and_clears_session_queue(harness):
 
 def test_speaker_change_is_announced(harness):
     d, spoken = harness
-    d.submit(_job("W1", D.AUTO, "hello", 1))
+    d.submit(_job("W1", D.AUTO, "hello"))
     _settle(spoken)
     assert any("speaking" in t for _, t in spoken), "should announce the window"
 
 
 def test_no_announcement_when_same_session_continues(harness):
     d, spoken = harness
-    d.submit(_job("W1", D.AUTO, "first", 1))
+    d.submit(_job("W1", D.AUTO, "first"))
     _settle(spoken)
     n_before = sum("speaking" in t for _, t in spoken)
-    d.submit(_job("W1", D.AUTO, "second", 2))
+    d.submit(_job("W1", D.AUTO, "second"))
     _settle(spoken)
     n_after = sum("speaking" in t for _, t in spoken)
     assert n_after == n_before, "same session should not re-announce"
@@ -167,3 +172,38 @@ def test_handle_request_dispatch(harness):
     assert d.handle_request({"type": "bogus"})["ok"] is False
     status = d.handle_request({"type": "status"})
     assert status["ok"] is True and "queued" in status
+
+
+class TestGroupByVoice:
+    """Regression tests for merging consecutive same-voice utterances into a
+    single `say` call. Spawning a fresh `say` subprocess per utterance was
+    clipping the trailing syllable of each one as the next process started -
+    audible on every utterance boundary (list items, paragraphs, ...).
+    """
+
+    def test_consecutive_same_voice_utterances_merge(self):
+        utterances = [Utterance(PROSE, "one"), Utterance(PROSE, "two"),
+                      Utterance(PROSE, "three")]
+        groups = dmod._group_by_voice(utterances, "Alex", "Alex")
+        assert groups == [("Alex", "one\ntwo\nthree")]
+
+    def test_voice_switch_starts_a_new_group(self):
+        utterances = [Utterance(PROSE, "prose one"), Utterance(HEADER, "header"),
+                      Utterance(PROSE, "prose two")]
+        groups = dmod._group_by_voice(utterances, "Alex", "Samantha")
+        assert groups == [
+            ("Alex", "prose one"),
+            ("Samantha", "header"),
+            ("Alex", "prose two"),
+        ]
+
+    def test_header_falls_back_to_prose_voice_and_merges(self):
+        # header_voice=None resolves to prose_voice, so header and prose
+        # utterances share a voice and should merge, same as real usage
+        # when dual-voice mode is off.
+        utterances = [Utterance(HEADER, "Title"), Utterance(PROSE, "body")]
+        groups = dmod._group_by_voice(utterances, "Alex", "Alex")
+        assert groups == [("Alex", "Title\nbody")]
+
+    def test_empty_utterances(self):
+        assert dmod._group_by_voice([], "Alex", "Alex") == []

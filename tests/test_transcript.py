@@ -75,24 +75,42 @@ def test_missing_file_returns_none():
     assert transcript.read_final_text("/no/such/file.jsonl", timeout=0.1) is None
 
 
-def test_freshness_falls_back_after_timeout(tmp_path):
-    # Only a definitively-old message exists; request_ts is in the future.
+def test_returns_immediately_when_text_already_present(tmp_path):
+    """Regression test: an earlier version gated on an entry timestamp that
+    was, by construction, always in the past relative to the caller's
+    request_ts - so every single call burned its full timeout before falling
+    back to the very text it had already found on the first scan. That added
+    a needless ~3s of dead air before every response actually started
+    playing. There must be no such wait when the text is already there.
+    """
     path = _write(tmp_path / "t.jsonl", [
-        _assistant("stale answer", "2000-01-01T00:00:00Z"),
+        _assistant("already there", "2026-08-08T10:00:00Z"),
     ])
     start = time.time()
-    got = transcript.read_final_text(path, request_ts=time.time() + 1000, timeout=0.3)
-    assert got == "stale answer"           # falls back to last seen
-    assert time.time() - start >= 0.3      # actually waited the timeout
+    got = transcript.read_final_text(path, timeout=5.0, poll=0.05)
+    assert got == "already there"
+    assert time.time() - start < 0.5   # did not wait out the timeout
 
 
-def test_freshness_returns_immediately_when_fresh(tmp_path):
-    path = _write(tmp_path / "t.jsonl", [
-        _assistant("fresh answer", "2026-08-08T10:00:00Z"),
-    ])
-    # request_ts well before the entry -> considered fresh, no waiting
-    got = transcript.read_final_text(path, request_ts=1.0, timeout=5.0, poll=0.05)
-    assert got == "fresh answer"
+def test_polls_until_text_appears(tmp_path):
+    path = tmp_path / "t.jsonl"
+    path.write_text("")  # nothing written yet
+
+    def _append_after_delay():
+        time.sleep(0.15)
+        with open(path, "a") as fh:
+            fh.write(json.dumps(_assistant("arrived late", "2026-08-08T10:00:00Z")) + "\n")
+
+    import threading
+    threading.Thread(target=_append_after_delay).start()
+
+    got = transcript.read_final_text(str(path), timeout=2.0, poll=0.05)
+    assert got == "arrived late"
+
+
+def test_timeout_with_no_text_returns_none(tmp_path):
+    path = _write(tmp_path / "t.jsonl", [])
+    assert transcript.read_final_text(path, timeout=0.2) is None
 
 
 def test_project_dir_slug():

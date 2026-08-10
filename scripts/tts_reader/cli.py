@@ -21,8 +21,8 @@ from tts_reader.daemon import AUTO, REPLAY  # noqa: E402
 from tts_reader.sanitize import sanitize  # noqa: E402
 
 USAGE = (
-    "usage: /tts <on|off|summary|full|replay|stop|preview|status|voices|"
-    "voice prose|header <name>|wpm <n>>"
+    "usage: /tts <on|off|summary|full|replay [full|summary]|stop|preview|"
+    "status|voices|voice prose|header <name>|wpm <n>>"
 )
 
 
@@ -56,21 +56,23 @@ def cmd_stop(_):
     return "Playback stopped."
 
 
-def cmd_replay(_):
+def cmd_replay(args):
+    if args and args[0] not in ("full", "summary"):
+        return "usage: /tts replay [full|summary]"
     path = _current_transcript()
     if not path:
         return "Nothing to replay: no transcript found for this session."
     cfg = config.load_config()
+    mode = args[0] if args else cfg.get("mode", "summary")
     client.send({
         "type": "speak",
         "channel": REPLAY,
         "session_id": os.getcwd(),  # replay is keyed to this window
         "transcript_path": path,
         "cwd": os.getcwd(),
-        "mode": cfg.get("mode", "summary"),
-        "request_ts": 0.0,  # replay the last message that's already on disk
+        "mode": mode,
     })
-    return "Replaying last response."
+    return f"Replaying last response ({mode})."
 
 
 def cmd_voice(args):
@@ -111,7 +113,7 @@ def cmd_preview(_):
     path = _current_transcript()
     if not path:
         return "Nothing to preview: no transcript found for this session."
-    text = transcript.read_final_text(path, request_ts=0.0, timeout=1.0)
+    text = transcript.read_final_text(path, timeout=1.0)
     if not text:
         return "Nothing to preview: no assistant message found."
     cfg = config.load_config()
@@ -151,6 +153,7 @@ def main(argv) -> int:
     if not handler:
         print(f"unknown subcommand {sub!r}\n{USAGE}")
         return 0
+    config.mark_command_run()
     print(handler(rest))
     return 0
 

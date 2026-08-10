@@ -2,6 +2,8 @@
 name = "claude-code-tts"
 version = "0.1.0"
 description = "Speak Claude Code responses aloud on macOS (Stop-hook plugin)."
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.9"
 dependencies = []  # runtime is Python stdlib only
 

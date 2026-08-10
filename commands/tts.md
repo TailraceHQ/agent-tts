@@ -1,6 +1,6 @@
 ---
 description: Control text-to-speech playback of Claude's responses
-argument-hint: on|off|summary|full|replay|stop|preview|status|voices|voice prose <name>|voice header <name>|wpm <n>
+argument-hint: on|off|summary|full|replay [full|summary]|stop|preview|status|voices|voice prose <name>|voice header <name>|wpm <n>
 allowed-tools: Bash(python3 *)
 ---
 
