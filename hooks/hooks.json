@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/tts_reader/hook.py\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/run\" \"${CLAUDE_PLUGIN_ROOT}/scripts/tts_reader/hook.py\"",
             "timeout": 10
           }
         ]

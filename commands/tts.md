@@ -1,9 +1,9 @@
 ---
 description: Control text-to-speech playback of Claude's responses
-argument-hint: on|off|summary|full|replay [full|summary]|stop|preview|status|voices|voice prose <name>|voice header <name>|wpm <n>
-allowed-tools: Bash(python3 *)
+argument-hint: on|off|summary|full|replay [full|summary]|stop|preview|status|voices|voice prose <name>|voice header <name>|wpm <n>|backend <auto|macos|windows|linux|cloud>|cloud <provider|voice|key|region> <value>
+allowed-tools: Bash(*)
 ---
 
-!`python3 "${CLAUDE_PLUGIN_ROOT}/scripts/tts_reader/cli.py" $ARGUMENTS`
+!`"${CLAUDE_PLUGIN_ROOT}/scripts/run" "${CLAUDE_PLUGIN_ROOT}/scripts/tts_reader/cli.py" $ARGUMENTS`
 
 The output above is the result of the TTS command. Relay it to the user verbatim (do not add commentary or take further action).

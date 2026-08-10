@@ -118,6 +118,46 @@ def test_preview_prints_queue_without_speaking(monkeypatch, capsys):
     assert "the build function" in out
 
 
+def test_backend_sets_config():
+    cli.main(["backend", "cloud"])
+    assert config.load_config()["backend"] == "cloud"
+
+
+def test_backend_rejects_unknown(capsys):
+    cli.main(["backend", "banana"])
+    assert "usage" in capsys.readouterr().out.lower()
+    assert config.load_config()["backend"] == "auto"
+
+
+def test_cloud_provider_and_voice_set_nested_config():
+    cli.main(["cloud", "provider", "openai"])
+    cli.main(["cloud", "voice", "nova"])
+    cloud = config.load_config()["cloud"]
+    assert cloud["provider"] == "openai"
+    assert cloud["voice"] == "nova"
+
+
+def test_cloud_rejects_unknown_provider(capsys):
+    cli.main(["cloud", "provider", "notreal"])
+    assert "unknown provider" in capsys.readouterr().out.lower()
+
+
+def test_cloud_key_is_hidden_in_confirmation(capsys):
+    cli.main(["cloud", "key", "sk-secret"])
+    out = capsys.readouterr().out
+    assert "sk-secret" not in out and "hidden" in out.lower()
+    assert config.load_config()["cloud"]["api_key"] == "sk-secret"
+
+
+def test_status_shows_backend_and_cloud(capsys):
+    cli.main(["backend", "cloud"])
+    cli.main(["cloud", "provider", "openai"])
+    cli.main(["status"])
+    out = capsys.readouterr().out
+    assert "backend=cloud" in out
+    assert "provider=openai" in out
+
+
 def test_unknown_subcommand(capsys):
     cli.main(["frobnicate"])
     assert "unknown subcommand" in capsys.readouterr().out.lower()

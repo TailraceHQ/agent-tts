@@ -38,7 +38,7 @@ def test_corrupt_config_falls_back(isolated_data_dir):
 
 
 def test_paths_live_in_data_dir(isolated_data_dir):
-    for p in (config.config_path(), config.socket_path(),
+    for p in (config.config_path(), config.port_path(),
               config.pid_path(), config.log_path()):
         assert str(p).startswith(str(isolated_data_dir))
 
