@@ -4,27 +4,40 @@
 [![Downloads](https://img.shields.io/github/downloads/TailraceHQ/claude-code-tts/total)](https://github.com/TailraceHQ/claude-code-tts/releases)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/claude-code-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/claude-code-tts/actions/workflows/test.yml)
 
-A macOS plugin that reads Claude Code's completed responses aloud. It cleans up
-Markdown before speaking, can use different voices for prose and headings, and
-coordinates playback across multiple Claude Code sessions so they do not talk
-over one another.
+A cross-platform plugin that reads Claude Code's completed responses aloud on
+**macOS, Windows, and Linux**. It cleans up Markdown before speaking, can use
+different voices for prose and headings, and coordinates playback across
+multiple Claude Code sessions so they do not talk over one another.
 
-The plugin is opt-in and uses only Python's standard library plus the macOS
-`say` command. Nothing is sent to an external text-to-speech service.
+The plugin is opt-in and uses only Python's standard library. By default it
+drives each operating system's built-in speech engine, so nothing is sent to an
+external service. Optionally, you can plug in your own voice through a cloud
+provider (ElevenLabs, OpenAI, or Azure) - see [Cloud voices](#cloud-voices).
 
 ## Prerequisites
 
-- macOS with working audio output and the built-in `say` command
 - Claude Code with plugin support
-- Python 3.9 or newer (`python3 --version`)
+- Python 3.9 or newer (`python3 --version`, or `python --version` on Windows)
+- A speech engine for your platform (all built in / freely installable):
+  - **macOS** - the built-in `say` command (nothing to install)
+  - **Windows** - PowerShell with SAPI (`System.Speech`), present by default
+  - **Linux** - `espeak-ng` (preferred) or `spd-say` from speech-dispatcher,
+    e.g. `sudo apt install espeak-ng`
 - Git, if installing from a source checkout
 
 Quickly verify the local speech engine before installing:
 
 ```bash
-command -v python3
-command -v say
+# macOS
 say "Text to speech is working"
+# Linux
+espeak-ng "Text to speech is working"
+```
+
+```powershell
+# Windows (PowerShell)
+Add-Type -AssemblyName System.Speech
+(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak("Text to speech is working")
 ```
 
 ## Install
@@ -73,7 +86,12 @@ you only need to enable it once.
 | `/tts voice prose <name>` | Select the voice used for normal prose |
 | `/tts voice header <name>` | Select a second voice for headings and blockquotes |
 | `/tts wpm <number>` | Set the speaking rate in words per minute |
-| `/tts voices` | List voices that the macOS `say` command can select |
+| `/tts voices` | List voices the active backend can select |
+| `/tts backend <auto\|macos\|windows\|linux\|cloud>` | Choose the speech engine (`auto` picks your OS's built-in engine) |
+| `/tts cloud provider <elevenlabs\|openai\|azure>` | Choose the cloud provider (used when backend is `cloud`) |
+| `/tts cloud voice <id>` | Set the provider voice id |
+| `/tts cloud key <api-key>` | Store the provider API key (env var preferred, see below) |
+| `/tts cloud region <region>` | Set the region (Azure only) |
 | `/tts status` | Show the active configuration |
 
 Voice names may contain spaces:
@@ -96,15 +114,26 @@ The defaults are:
   "mode": "summary",
   "prose_voice": null,
   "header_voice": null,
-  "wpm": 175
+  "wpm": 175,
+  "backend": "auto",
+  "cloud": {
+    "provider": "elevenlabs",
+    "voice": null,
+    "api_key": null,
+    "region": null
+  }
 }
 ```
 
 Use the `/tts` commands rather than editing this file where possible. A `null`
-prose voice tells `say` to use the macOS system voice. A `null` header voice
-uses the prose voice, which disables the audible prose/header distinction.
-There is not currently a reset-voice command; set either value back to `null`
-in `config.json` when you need to return to these defaults.
+prose voice tells the active backend to use its system default voice. A `null`
+header voice uses the prose voice, which disables the audible prose/header
+distinction. There is not currently a reset-voice command; set either value
+back to `null` in `config.json` when you need to return to these defaults.
+
+`backend` selects the speech engine: `auto` (the default) resolves to your
+operating system's built-in engine, or force `macos` / `windows` / `linux` /
+`cloud`. The `cloud` block is only used when `backend` is `cloud`.
 
 Configuration and daemon state are stored under:
 
@@ -113,8 +142,9 @@ Configuration and daemon state are stored under:
   config.json
   daemon.log
   daemon.pid
-  daemon.sock
+  daemon.port     port + auth token for the loopback control channel
   debug.log
+  audio/          synthesized clips (cloud backend only; auto-pruned)
 ```
 
 This path is fixed rather than derived from `$CLAUDE_PLUGIN_DATA`: Claude Code
@@ -126,7 +156,7 @@ Pinning both entry points to the same fixed path keeps them in sync. The
 daemon exits after 30 minutes without queued or active work and starts again
 automatically when needed.
 
-## Voice quality
+## Voice quality (macOS)
 
 Audio quality comes from the installed macOS voice, not from this plugin.
 Run `/tts voices` to see the voices that `say -v ?` exposes, then try them in a
@@ -157,13 +187,50 @@ This behavior is controlled by macOS and varies by release. Siri voices still
 cannot reliably be selected by name, and assigning separate Siri voices to the
 prose and header roles is not supported.
 
+## Cloud voices
+
+To use your own voice from a hosted provider instead of the built-in OS engine,
+switch the backend to `cloud` and pick a provider and voice. Each response is
+synthesized over HTTPS and played locally.
+
+```text
+/tts backend cloud
+/tts cloud provider elevenlabs
+/tts cloud voice 21m00Tcm4TlvDq8ikWAM
+```
+
+Supported providers and their voice ids:
+
+| Provider | `provider` value | Voice id example | Notes |
+| --- | --- | --- | --- |
+| ElevenLabs | `elevenlabs` | `21m00Tcm4TlvDq8ikWAM` (Rachel) | `/tts voices` lists your account's voices when a key is set |
+| OpenAI | `openai` | `alloy`, `nova`, … | `/tts wpm` maps to the API `speed` parameter |
+| Azure | `azure` | `en-US-JennyNeural` | also requires `/tts cloud region <region>` |
+
+**API keys.** The key is read from an environment variable first, falling back
+to what you store with `/tts cloud key`. Prefer the environment variable so the
+key never lands in `config.json`:
+
+| Provider | Environment variable |
+| --- | --- |
+| ElevenLabs | `ELEVENLABS_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Azure | `AZURE_SPEECH_KEY` |
+
+Playback of synthesized audio needs a player: macOS uses `afplay` (built in),
+Linux uses `ffplay`/`mpg123`/`aplay`/`paplay` (install one, e.g. `ffmpeg`), and
+Windows uses PowerShell's media APIs. If a cloud request fails or no API key is
+found, the plugin stays silent for that turn rather than raising - check
+`debug.log` if a cloud voice is unexpectedly quiet.
+
 ## How it works
 
 Claude Code runs the plugin's `Stop` hook after a turn. The hook itself does
 not read the transcript - it just signals a background player daemon, which
 does the (slightly slower) work of reading the transcript, converting it into
-an utterance queue, and invoking `say` once per utterance. That split keeps
-the hook fast so it never delays the turn from returning control to you.
+an utterance queue, and speaking each utterance through the active backend
+(the OS engine or a cloud provider). That split keeps the hook fast so it never
+delays the turn from returning control to you.
 
 By the time the hook fires, the turn's final assistant message is already on
 disk, so the daemon normally finds it on the very first read. If the
@@ -312,12 +379,19 @@ Project layout:
 .claude-plugin/plugin.json   Plugin manifest
 hooks/hooks.json             Stop hook registration
 commands/tts.md              /tts slash command
+scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
 scripts/tts_reader/
   sanitize.py                Markdown to utterance queue
   transcript.py              Final assistant-message polling
-  engine.py                  macOS `say` wrapper
+  engine/                    Pluggable speech backends + factory
+    base.py                    Backend interface
+    macos.py                   macOS `say`
+    windows.py                 Windows SAPI via PowerShell
+    linux.py                   Linux espeak-ng / spd-say
+    cloud.py                   ElevenLabs / OpenAI / Azure
+    player.py                  Cross-platform audio-file player (cloud)
   daemon.py                  Queue, channels, and session arbitration
-  client.py                  Daemon startup and socket client
+  client.py                  Daemon startup and loopback-TCP client
   hook.py                    Stop-hook entry point
   cli.py                     /tts command dispatcher
   config.py                  Configuration and data paths
@@ -326,9 +400,13 @@ tests/                       Unit tests (no audio required)
 
 ## Limitations
 
-- macOS only; playback depends on the platform-specific `say` command.
-- Voice availability and quality depend on the macOS version, language, and
-  downloaded voice assets. Siri voices cannot be selected by name.
+- Playback depends on a working speech engine for your platform (`say` on
+  macOS, SAPI/PowerShell on Windows, `espeak-ng`/`spd-say` on Linux) or, for
+  the cloud backend, network access and a valid API key.
+- Voice availability and quality depend on the platform, its version, language,
+  and downloaded voice assets. On macOS, Siri voices cannot be selected by name.
+- The cloud backend synthesizes over the network, so its first-audio latency is
+  higher than the local engines and it incurs provider usage costs.
 - The plugin reads Claude Code's internal JSONL transcript format, which is not
   a stable public interface and may change in a future Claude Code release.
 - The transcript lookup used by `/tts replay` and `/tts preview` selects the

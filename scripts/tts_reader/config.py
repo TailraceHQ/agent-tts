@@ -20,9 +20,16 @@ from pathlib import Path
 DEFAULT_CONFIG = {
     "enabled": False,       # opt-in: nothing speaks until `/tts on`
     "mode": "summary",      # "summary" (lead paragraph) or "full"
-    "prose_voice": None,    # None -> macOS system default voice
+    "prose_voice": None,    # None -> system default voice
     "header_voice": None,   # None -> fall back to prose voice (dual-voice off)
     "wpm": 175,             # words per minute
+    "backend": "auto",      # auto | macos | windows | linux | cloud
+    "cloud": {              # used only when backend == "cloud"
+        "provider": "elevenlabs",  # elevenlabs | openai | azure
+        "voice": None,             # provider voice id
+        "api_key": None,           # optional; env var preferred (see engine/cloud.py)
+        "region": None,            # azure only
+    },
 }
 
 
@@ -36,8 +43,11 @@ def config_path() -> Path:
     return data_dir() / "config.json"
 
 
-def socket_path() -> Path:
-    return data_dir() / "daemon.sock"
+def port_path() -> Path:
+    """File the daemon writes ``"<port>\\n<token>"`` to for its TCP control
+    channel. Replaces the old Unix-domain socket path so the daemon works on
+    Windows (which lacks reliable ``AF_UNIX`` support)."""
+    return data_dir() / "daemon.port"
 
 
 def pid_path() -> Path:
@@ -113,12 +123,20 @@ def debug_log(event: str, **fields) -> None:
 
 def load_config() -> dict:
     cfg = dict(DEFAULT_CONFIG)
+    cfg["cloud"] = dict(DEFAULT_CONFIG["cloud"])  # own copy of the nested dict
     p = config_path()
     if p.exists():
         try:
-            cfg.update(json.loads(p.read_text()))
+            stored = json.loads(p.read_text())
         except (ValueError, OSError):
-            pass  # corrupt config -> fall back to defaults
+            stored = {}  # corrupt config -> fall back to defaults
+        if isinstance(stored, dict):
+            # deep-merge the nested cloud dict so a partial stored value (e.g.
+            # only a saved api_key) doesn't drop the other cloud defaults
+            stored_cloud = stored.pop("cloud", None)
+            cfg.update(stored)
+            if isinstance(stored_cloud, dict):
+                cfg["cloud"].update(stored_cloud)
     return cfg
 
 
@@ -129,5 +147,13 @@ def save_config(cfg: dict) -> None:
 def set_values(**changes) -> dict:
     cfg = load_config()
     cfg.update({k: v for k, v in changes.items() if v is not None})
+    save_config(cfg)
+    return cfg
+
+
+def set_cloud_values(**changes) -> dict:
+    """Update keys inside the nested ``cloud`` config block."""
+    cfg = load_config()
+    cfg["cloud"].update({k: v for k, v in changes.items() if v is not None})
     save_config(cfg)
     return cfg

@@ -21,12 +21,14 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import socket
 import sys
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -84,6 +86,7 @@ class Daemon:
         self.running = True
         self.last_activity = time.time()
         self._seq = 0
+        self.token: Optional[str] = None
 
     # -- submission / arbitration -----------------------------------------
 
@@ -145,11 +148,28 @@ class Daemon:
 
     # -- playback ---------------------------------------------------------
 
-    def _speak_blocking(self, text: str, voice, wpm: int) -> None:
+    def _speak_blocking(self, backend, text: str, voice, wpm: int) -> None:
         with self.lock:
             if self.abort_active:
                 return
-            proc = engine.speak(text, voice, wpm)
+        # Synthesize/spawn *outside* the lock: the cloud backend does a blocking
+        # network round-trip in speak(), and holding self.lock across it would
+        # stall stop/status/arbitration for the whole request (up to the HTTP
+        # timeout). The OS backends return a Popen immediately, so this is free
+        # for them.
+        proc = backend.speak(text, voice, wpm)
+        if proc is None:
+            return  # backend spoke nothing (e.g. missing engine / cloud key)
+        with self.lock:
+            if self.abort_active:
+                # a stop/supersede landed while we were synthesizing; drop the
+                # playback we just started rather than letting it speak.
+                if proc.poll() is None:
+                    try:
+                        proc.terminate()
+                    except OSError:
+                        pass
+                return
             self.active_proc = proc
         proc.wait()
         with self.lock:
@@ -166,6 +186,7 @@ class Daemon:
             )
             return
         cfg = config.load_config()
+        backend = engine.get_backend(cfg)
         prose_voice = cfg.get("prose_voice")
         header_voice = cfg.get("header_voice") or prose_voice
         wpm = int(cfg.get("wpm", 175))
@@ -188,10 +209,10 @@ class Daemon:
         with self.lock:
             if job.session_id != self.last_speaking_session:
                 self.last_speaking_session = job.session_id
-                label = os.path.basename(job.cwd.rstrip("/")) or "session"
+                label = Path(job.cwd).name or "session"
                 announce = f"{label} speaking."
         if announce:
-            self._speak_blocking(announce, prose_voice, wpm)
+            self._speak_blocking(backend, announce, prose_voice, wpm)
             time.sleep(VOICE_SWITCH_PAUSE)  # let the announcement's audio drain
 
         for i, (voice, group_text) in enumerate(
@@ -202,7 +223,7 @@ class Daemon:
                     break
             if i > 0:
                 time.sleep(VOICE_SWITCH_PAUSE)  # let the prior group's audio drain
-            self._speak_blocking(group_text, voice, wpm)
+            self._speak_blocking(backend, group_text, voice, wpm)
 
     def player_loop(self) -> None:
         while True:
@@ -231,6 +252,11 @@ class Daemon:
     # -- control socket ---------------------------------------------------
 
     def handle_request(self, req: dict) -> dict:
+        # The control channel is loopback TCP, reachable by any local process;
+        # a shared token (written to the 0600 port file) gates every request so
+        # another process can't inject speak/shutdown jobs.
+        if self.token is not None and req.get("token") != self.token:
+            return {"ok": False, "error": "unauthorized"}
         t = req.get("type")
         if t == "ping":
             return {"ok": True}
@@ -263,13 +289,22 @@ class Daemon:
         return {"ok": False, "error": f"unknown request {t!r}"}
 
     def serve(self) -> None:
-        sock_path = config.socket_path()
-        if sock_path.exists():
-            sock_path.unlink()
-        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        srv.bind(str(sock_path))
+        # Loopback TCP (not AF_UNIX) so this works on Windows too. Bind to an
+        # ephemeral port and publish it - plus an auth token - via the port file.
+        self.token = secrets.token_hex(16)
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("127.0.0.1", 0))
+        port = srv.getsockname()[1]
         srv.listen(16)
         srv.settimeout(5.0)
+
+        port_file = config.port_path()
+        port_file.write_text(f"{port}\n{self.token}\n")
+        try:
+            os.chmod(port_file, 0o600)  # best-effort; no-op on some platforms
+        except OSError:
+            pass
         config.pid_path().write_text(str(os.getpid()))
 
         threading.Thread(target=self.player_loop, daemon=True).start()
@@ -295,7 +330,7 @@ class Daemon:
                     pass
 
         srv.close()
-        for p in (config.socket_path(), config.pid_path()):
+        for p in (config.port_path(), config.pid_path()):
             try:
                 p.unlink()
             except OSError:

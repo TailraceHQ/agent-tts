@@ -54,7 +54,14 @@ def harness(monkeypatch):
             spoken.append((current["sid"], text))
         return FakeProc()
 
-    monkeypatch.setattr(engine, "speak", fake_speak)
+    class FakeBackend:
+        def speak(self, text, voice, wpm):
+            return fake_speak(text, voice, wpm)
+
+        def list_voices(self):
+            return []
+
+    monkeypatch.setattr(engine, "get_backend", lambda cfg=None: FakeBackend())
     # the "transcript_path" carries the response text in these tests
     monkeypatch.setattr(transcript, "read_final_text", lambda path, **_: path)
     monkeypatch.setattr(dmod, "sanitize", lambda text, mode: [

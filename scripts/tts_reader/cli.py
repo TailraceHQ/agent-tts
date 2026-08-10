@@ -22,8 +22,13 @@ from tts_reader.sanitize import sanitize  # noqa: E402
 
 USAGE = (
     "usage: /tts <on|off|summary|full|replay [full|summary]|stop|preview|"
-    "status|voices|voice prose|header <name>|wpm <n>>"
+    "status|voices|voice prose|header <name>|wpm <n>|"
+    "backend <auto|macos|windows|linux|cloud>|"
+    "cloud <provider|voice|key|region> <value>>"
 )
+
+BACKENDS = ("auto", "macos", "windows", "linux", "cloud")
+CLOUD_PROVIDERS = ("elevenlabs", "openai", "azure")
 
 
 def _current_transcript() -> str | None:
@@ -91,10 +96,40 @@ def cmd_wpm(args):
     return f"Speaking rate set to {args[0]} words per minute."
 
 
+def cmd_backend(args):
+    if not args or args[0] not in BACKENDS:
+        return f"usage: /tts backend <{'|'.join(BACKENDS)}>"
+    config.set_values(backend=args[0])
+    return f"Backend set to {args[0]}."
+
+
+def cmd_cloud(args):
+    usage = (
+        "usage: /tts cloud <provider|voice|key|region> <value>\n"
+        f"  provider: {' | '.join(CLOUD_PROVIDERS)}"
+    )
+    if len(args) < 2 or args[0] not in ("provider", "voice", "key", "region"):
+        return usage
+    field, value = args[0], " ".join(args[1:])
+    if field == "provider":
+        if value not in CLOUD_PROVIDERS:
+            return f"unknown provider {value!r}. choose: {', '.join(CLOUD_PROVIDERS)}"
+        config.set_cloud_values(provider=value)
+        return f"Cloud provider set to {value}."
+    key = {"voice": "voice", "key": "api_key", "region": "region"}[field]
+    config.set_cloud_values(**{key: value})
+    shown = "(hidden)" if field == "key" else value
+    return f"Cloud {field} set to {shown}."
+
+
 def cmd_voices(_):
-    voices = engine.list_voices()
+    cfg = config.load_config()
+    voices = engine.list_voices(cfg)
     if not voices:
-        return "No voices found (is this macOS with `say` installed?)."
+        return (
+            "No voices found for the active backend "
+            f"({cfg.get('backend', 'auto')}). Is its TTS engine installed?"
+        )
     lines = [f"{name}  [{loc}]" for name, loc, _ in voices]
     return "Installed voices:\n" + "\n".join(lines)
 
@@ -102,11 +137,20 @@ def cmd_voices(_):
 def cmd_status(_):
     cfg = config.load_config()
     dv = "on" if cfg.get("header_voice") else "off"
-    return (
-        f"enabled={cfg['enabled']}  mode={cfg['mode']}  wpm={cfg['wpm']}\n"
+    lines = [
+        f"enabled={cfg['enabled']}  mode={cfg['mode']}  wpm={cfg['wpm']}",
         f"prose_voice={cfg['prose_voice'] or 'system default'}  "
-        f"header_voice={cfg['header_voice'] or '(same as prose)'}  dual_voice={dv}"
-    )
+        f"header_voice={cfg['header_voice'] or '(same as prose)'}  dual_voice={dv}",
+        f"backend={cfg.get('backend', 'auto')}",
+    ]
+    if cfg.get("backend") == "cloud":
+        cl = cfg.get("cloud", {})
+        has_key = "yes" if cl.get("api_key") else "env/none"
+        lines.append(
+            f"cloud: provider={cl.get('provider')}  "
+            f"voice={cl.get('voice') or '(provider default)'}  api_key={has_key}"
+        )
+    return "\n".join(lines)
 
 
 def cmd_preview(_):
@@ -141,6 +185,8 @@ COMMANDS = {
     "voices": cmd_voices,
     "status": cmd_status,
     "preview": cmd_preview,
+    "backend": cmd_backend,
+    "cloud": cmd_cloud,
 }
 
 

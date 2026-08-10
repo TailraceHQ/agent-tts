@@ -1,0 +1,20 @@
+#!/bin/sh
+# Cross-platform Python launcher (POSIX side).
+#
+# The hook/command entry points call this instead of a hardcoded `python3`,
+# because that name is not reliably present everywhere (Windows exposes
+# `python` / `py`, not `python3`). We find an interpreter and exec it on the
+# arguments we were given (the target .py plus its own args).
+#
+# On Windows, cmd.exe resolves `.../scripts/run` to `run.cmd` via PATHEXT, so
+# that file is the Windows counterpart of this one.
+#
+# We exit 0 even when no interpreter is found: a broken TTS setup must never
+# fail a turn's Stop hook.
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1; then
+    exec "$py" "$@"
+  fi
+done
+echo "claude-code-tts: no python3/python interpreter found on PATH" >&2
+exit 0

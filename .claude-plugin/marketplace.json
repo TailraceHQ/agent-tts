@@ -8,7 +8,7 @@
     {
       "name": "tts",
       "source": ".",
-      "description": "Speaks Claude's responses aloud on macOS. Sanitizes markdown into a per-voice utterance queue (prose vs. heading voice), reads on the Stop hook, and coordinates playback across sessions.",
+      "description": "Speaks Claude's responses aloud on macOS, Windows, and Linux (with optional cloud voices). Sanitizes markdown into a per-voice utterance queue (prose vs. heading voice), reads on the Stop hook, and coordinates playback across sessions.",
       "version": "0.1.0"
     }
   ]
