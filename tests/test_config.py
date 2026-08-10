@@ -43,31 +43,80 @@ def test_paths_live_in_data_dir(isolated_data_dir):
         assert str(p).startswith(str(isolated_data_dir))
 
 
-def test_data_dir_ignores_claude_plugin_data_env(monkeypatch, tmp_path):
-    """Regression test for a real bug: Claude Code injects $CLAUDE_PLUGIN_DATA
-    into hook subprocesses but NOT into the inline bash that runs the /tts
-    command. Keying data_dir() off that env var meant hook.py and cli.py
-    resolved to two different directories - `/tts on` never became visible to
-    the Stop hook, which silently no-op'd on every turn. data_dir() must
-    ignore the env var and always resolve to the same fixed path.
-    """
+def test_data_dir_uses_canonical_when_fresh(monkeypatch, tmp_path):
+    """Fresh install: neither dir exists → create/use ~/.agent-tts."""
     fake_home = tmp_path / "home"
+    fake_home.mkdir()
     monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
     monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path / "hook-scoped-dir"))
 
     resolved = _real_data_dir()
 
-    assert resolved == fake_home / ".claude" / "claude-code-tts"
+    assert resolved == fake_home / ".agent-tts"
+    assert resolved.is_dir()
+
+
+def test_data_dir_keeps_legacy_when_canonical_missing(monkeypatch, tmp_path):
+    """If only ~/.claude/claude-code-tts exists, keep using it (no copy)."""
+    fake_home = tmp_path / "home"
+    legacy = fake_home / ".claude" / "claude-code-tts"
+    legacy.mkdir(parents=True)
+    (legacy / "config.json").write_text('{"enabled": true}\n')
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+
+    resolved = _real_data_dir()
+
+    assert resolved == legacy
+    assert not (fake_home / ".agent-tts").exists()
+
+
+def test_data_dir_prefers_canonical_when_both_exist(monkeypatch, tmp_path):
+    fake_home = tmp_path / "home"
+    canonical = fake_home / ".agent-tts"
+    legacy = fake_home / ".claude" / "claude-code-tts"
+    canonical.mkdir(parents=True)
+    legacy.mkdir(parents=True)
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+
+    assert _real_data_dir() == canonical
+
+
+def test_data_dir_env_override(monkeypatch, tmp_path):
+    override = tmp_path / "custom-tts"
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.setenv(config.DATA_DIR_ENV, str(override))
+
+    resolved = _real_data_dir()
+
+    assert resolved == override
+    assert override.is_dir()
+
+
+def test_data_dir_ignores_claude_plugin_data_env(monkeypatch, tmp_path):
+    """Regression: $CLAUDE_PLUGIN_DATA must not split hook vs CLI state."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path / "hook-scoped-dir"))
+
+    resolved = _real_data_dir()
+
+    assert resolved == fake_home / ".agent-tts"
+    assert resolved != tmp_path / "hook-scoped-dir"
 
 
 def test_cli_and_hook_contexts_agree_on_config(monkeypatch, tmp_path):
-    """End-to-end regression test for the same bug, exercised through the
-    public config API the way cli.py (/tts on) and hook.py (Stop hook)
-    actually use it, under the differing env each really runs with.
-    """
+    """End-to-end regression: cli.py and hook.py share one resolved data dir."""
     fake_home = tmp_path / "home"
+    fake_home.mkdir()
     monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
     monkeypatch.setattr(config, "data_dir", _real_data_dir)
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
 
     # cli.py's execution context: Claude Code does not set this for inline bash.
     monkeypatch.delenv("CLAUDE_PLUGIN_DATA", raising=False)
@@ -79,6 +128,7 @@ def test_cli_and_hook_contexts_agree_on_config(monkeypatch, tmp_path):
     cfg = config.load_config()  # what hook.py reads to decide whether to speak
 
     assert cfg["enabled"] is True
+    assert config.config_path().parent == fake_home / ".agent-tts"
 
 
 def test_consume_command_suppression_false_when_not_marked():

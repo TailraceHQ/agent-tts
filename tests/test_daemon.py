@@ -181,6 +181,44 @@ def test_handle_request_dispatch(harness):
     assert status["ok"] is True and "queued" in status
 
 
+def test_inline_text_skips_transcript_read(harness, monkeypatch):
+    """Hosts may pass response text directly; daemon must not require a file."""
+    d, spoken = harness
+    calls = []
+
+    def boom(path, **_):
+        calls.append(path)
+        raise AssertionError("transcript read should be skipped when text is set")
+
+    monkeypatch.setattr(transcript, "read_final_text", boom)
+    d.submit(D.Job(
+        session_id="S",
+        channel=D.AUTO,
+        transcript_path="",
+        cwd="/w/S",
+        mode="full",
+        text="inline-body",
+    ))
+    _settle(spoken)
+    assert calls == []
+    assert any(t.startswith("inline-body") for _, t in spoken)
+
+
+def test_empty_inline_text_falls_back_to_transcript(harness):
+    d, spoken = harness
+    # harness stubs read_final_text to return the path string
+    d.submit(D.Job(
+        session_id="S",
+        channel=D.AUTO,
+        transcript_path="from-file",
+        cwd="/w/S",
+        mode="full",
+        text="   ",
+    ))
+    _settle(spoken)
+    assert any(t.startswith("from-file") for _, t in spoken)
+
+
 class TestGroupByVoice:
     """Regression tests for merging consecutive same-voice utterances into a
     single `say` call. Spawning a fresh `say` subprocess per utterance was

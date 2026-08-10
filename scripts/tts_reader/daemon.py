@@ -71,6 +71,7 @@ class Job:
     transcript_path: str
     cwd: str
     mode: str
+    text: Optional[str] = None  # inline text; when set, skips transcript read
     seq: int = field(default=0)
 
 
@@ -176,13 +177,18 @@ class Daemon:
             self.active_proc = None
 
     def _play(self, job: Job) -> None:
-        text = transcript.read_final_text(job.transcript_path)
+        # Prefer host-supplied inline text (future Cursor/Antigravity paths);
+        # Claude and replay still use the transcript file when text is absent.
+        text = job.text.strip() if job.text else None
+        if not text:
+            text = transcript.read_final_text(job.transcript_path)
         if not text:
             config.debug_log(
                 "play_no_text",
                 session_id=job.session_id,
                 channel=job.channel,
                 transcript_path=job.transcript_path,
+                had_inline_text=bool(job.text),
             )
             return
         cfg = config.load_config()
@@ -267,6 +273,7 @@ class Daemon:
                 transcript_path=req.get("transcript_path", ""),
                 cwd=req.get("cwd", ""),
                 mode=req.get("mode", "summary"),
+                text=req.get("text"),
             ))
             return {"ok": True, "queued": True}
         if t == "stop":
