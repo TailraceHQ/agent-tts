@@ -160,8 +160,32 @@ automatic playback. Pinning both entry points to the same resolved path keeps
 them in sync. The daemon exits after 30 minutes without queued or active work
 and starts again automatically when needed.
 
-The core is host-agnostic (shared daemon + adapters); only the Claude Code
-plugin packaging is wired today. See [docs/multi-host.md](docs/multi-host.md).
+The core is host-agnostic (shared daemon + adapters). Claude Code remains the
+primary packaged host; Cursor and Antigravity MVPs live under `hosts/`. See
+[docs/multi-host.md](docs/multi-host.md).
+
+### Cursor
+
+1. Clone this repo to a stable path.
+2. Merge `hosts/cursor/hooks.json` into `~/.cursor/hooks.json` (user-global) or
+   `<project>/.cursor/hooks.json`, replacing `REPLACE_WITH_CHECKOUT` with the
+   absolute clone path.
+3. Enable once:
+   `scripts/run scripts/tts_reader/cli.py on`
+
+Details: [hosts/cursor/README.md](hosts/cursor/README.md).
+
+### Antigravity
+
+Preferred (whole checkout so `scripts/` is available after install):
+
+```bash
+agy plugin install /absolute/path/to/claude-code-tts
+/absolute/path/to/claude-code-tts/hosts/antigravity/run cli on
+```
+
+Or install only `hosts/antigravity` and set `AGENT_TTS_ROOT` to the clone.
+Details: [hosts/antigravity/README.md](hosts/antigravity/README.md).
 
 ## Voice quality (macOS)
 
@@ -386,15 +410,20 @@ plus `debug.log` for hook/daemon tracing.
 Project layout:
 
 ```text
-.claude-plugin/plugin.json   Plugin manifest
-hooks/hooks.json             Stop hook registration
-commands/tts.md              /tts slash command
-docs/multi-host.md           Multi-host decisions (Cursor / Antigravity)
+.claude-plugin/plugin.json   Claude Code plugin manifest
+hooks/hooks.json             Claude Stop hook registration
+commands/tts.md              Claude /tts slash command
+plugin.json                  Antigravity plugin manifest (repo-root install)
+hooks.json                   Antigravity Stop hook registration
+skills/tts/SKILL.md          Antigravity skill → cli.py
+hosts/cursor/                Cursor hooks sample + skill note
+hosts/antigravity/           Antigravity scaffold + run shim
+docs/multi-host.md           Multi-host decisions and status
 scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
 scripts/tts_reader/
   adapters/                  Host Stop-payload → SpeakRequest mappers
   sanitize.py                Markdown to utterance queue
-  transcript.py              Final assistant-message polling (Claude JSONL)
+  transcript.py              Final assistant-message polling (Claude + Cursor JSONL)
   engine/                    Pluggable speech backends + factory
     base.py                    Backend interface
     macos.py                   macOS `say`
@@ -405,6 +434,9 @@ scripts/tts_reader/
   daemon.py                  Queue, channels, and session arbitration
   client.py                  Daemon startup and loopback-TCP client
   hook.py                    Claude Stop-hook entry point
+  hook_cursor.py             Cursor stop-hook entry point
+  hook_antigravity.py        Antigravity Stop-hook entry point
+  hook_common.py             Shared Stop-hook runner
   cli.py                     /tts command dispatcher
   config.py                  Configuration and data paths
 tests/                       Unit tests (no audio required)

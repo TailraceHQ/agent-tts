@@ -1,0 +1,52 @@
+#!/bin/sh
+# Resolve the shared tts_reader checkout, then exec scripts/run.
+#
+# Install layouts supported:
+# 1) Whole-repo plugin root (preferred): ANTIGRAVITY_PLUGIN_ROOT has scripts/
+# 2) hosts/antigravity only, with AGENT_TTS_ROOT pointing at the clone
+# 3) hosts/antigravity living inside an uncopied checkout (../../scripts)
+#
+# Always exit 0 on resolution failure so a misconfigured install cannot break
+# an Antigravity turn.
+
+set -eu
+
+resolve_root() {
+  if [ -n "${AGENT_TTS_ROOT:-}" ] && [ -d "$AGENT_TTS_ROOT/scripts/tts_reader" ]; then
+    printf '%s\n' "$AGENT_TTS_ROOT"
+    return 0
+  fi
+  if [ -n "${ANTIGRAVITY_PLUGIN_ROOT:-}" ] && [ -d "$ANTIGRAVITY_PLUGIN_ROOT/scripts/tts_reader" ]; then
+    printf '%s\n' "$ANTIGRAVITY_PLUGIN_ROOT"
+    return 0
+  fi
+  here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+  if [ -d "$here/../../scripts/tts_reader" ]; then
+    CDPATH= cd -- "$here/../.." && pwd
+    return 0
+  fi
+  return 1
+}
+
+ROOT=$(resolve_root) || {
+  echo "agent-tts: cannot find scripts/; set AGENT_TTS_ROOT to the repo checkout" >&2
+  # Still emit Antigravity-safe stdout when invoked as the Stop hook.
+  if [ "${1:-}" = "hook" ]; then
+    printf '{}\n'
+  fi
+  exit 0
+}
+
+case "${1:-}" in
+  hook)
+    exec "$ROOT/scripts/run" "$ROOT/scripts/tts_reader/hook_antigravity.py"
+    ;;
+  cli)
+    shift
+    exec "$ROOT/scripts/run" "$ROOT/scripts/tts_reader/cli.py" "$@"
+    ;;
+  *)
+    echo "usage: run hook | run cli <tts-args...>" >&2
+    exit 0
+    ;;
+esac

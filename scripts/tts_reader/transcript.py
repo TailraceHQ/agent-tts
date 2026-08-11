@@ -52,8 +52,13 @@ def _entry_timestamp(obj: dict) -> float:
 def _assistant_text(obj: dict) -> str:
     """Extract concatenated text blocks from an assistant entry, else ""."""
     msg = obj.get("message", obj)
-    role = obj.get("type") or msg.get("role")
+    # Claude: top-level type=assistant. Cursor role-nested JSONL: top-level role.
+    role = obj.get("type") or obj.get("role") or (
+        msg.get("role") if isinstance(msg, dict) else None
+    )
     if role not in ("assistant",):
+        return ""
+    if not isinstance(msg, dict):
         return ""
     content = msg.get("content")
     if isinstance(content, str):

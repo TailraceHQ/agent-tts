@@ -131,3 +131,30 @@ def test_latest_transcript_for_cwd(tmp_path, monkeypatch):
 def test_latest_transcript_none_when_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(transcript, "project_dir_for_cwd", lambda cwd: tmp_path)
     assert transcript.latest_transcript_for_cwd("/anything") is None
+
+
+def test_reads_cursor_role_nested_jsonl(tmp_path):
+    """Cursor agent-transcripts use top-level role, not Claude's type field."""
+    path = _write(tmp_path / "cursor.jsonl", [
+        {
+            "role": "user",
+            "message": {"content": [{"type": "text", "text": "hi"}]},
+        },
+        {
+            "role": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "Cursor final answer."},
+                    {"type": "tool_use", "name": "Shell", "input": {}},
+                ]
+            },
+        },
+        {"type": "turn_ended", "status": "success"},
+        {
+            "role": "assistant",
+            "message": {
+                "content": [{"type": "text", "text": "After tools."}]
+            },
+        },
+    ])
+    assert transcript.read_final_text(path, timeout=0.2) == "After tools."

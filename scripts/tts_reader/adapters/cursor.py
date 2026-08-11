@@ -1,11 +1,12 @@
-"""Stub: map Cursor Agent stop-hook stdin into a SpeakRequest.
+"""Map Cursor Agent stop-hook stdin into a SpeakRequest.
 
-Phase 0 finding: live Cursor transcripts were not captured in this environment.
-Field names below come from public Cursor hook docs; the transcript *format*
-reader is not implemented yet (Claude JSONL reader remains the only one).
-
-Expected stdin (documented): conversation_id, transcript_path, workspace_roots,
+Documented stdin fields: conversation_id, transcript_path, workspace_roots,
 status (completed|aborted|error), hook_event_name.
+
+Transcript lines are often role-nested JSONL
+(``{"role":"assistant","message":{"content":[...]}}``). The shared transcript
+reader accepts that shape; if Cursor changes format, prefer inline ``text``
+later rather than blocking the Stop hook.
 """
 
 from __future__ import annotations
@@ -14,6 +15,11 @@ import os
 from typing import Any, Mapping, Optional
 
 from tts_reader.adapters.common import SpeakRequest
+
+
+def should_speak(payload: Mapping[str, Any]) -> bool:
+    """Only speak completed agent loops; skip aborted/error stops."""
+    return payload.get("status") == "completed"
 
 
 def from_stop_payload(
@@ -25,9 +31,10 @@ def from_stop_payload(
 ) -> SpeakRequest:
     roots = payload.get("workspace_roots") or []
     cwd = roots[0] if isinstance(roots, list) and roots else os.getcwd()
+    path = payload.get("transcript_path")
     return SpeakRequest(
         session_id=str(payload.get("conversation_id") or "?"),
-        transcript_path=str(payload.get("transcript_path") or ""),
+        transcript_path=str(path or ""),
         text=text,
         cwd=str(cwd),
         channel=channel,

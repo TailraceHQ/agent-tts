@@ -1,11 +1,10 @@
-"""Stub: map Google Antigravity Stop-hook stdin into a SpeakRequest.
+"""Map Google Antigravity Stop-hook stdin into a SpeakRequest.
 
-Phase 0 finding: live Antigravity transcripts were not captured here. Field
-names below come from public Antigravity hook docs; a dedicated transcript
-reader is deferred until sample transcripts exist.
+Documented stdin fields: conversationId, transcriptPath, workspacePaths,
+fullyIdle, terminationReason, optional error.
 
-Expected stdin (documented): conversationId, transcriptPath, workspacePaths,
-fullyIdle, terminationReason.
+Always return empty stdout ``{}`` from the hook entry — never
+``{"decision":"continue"}``, which would restart the agent loop.
 """
 
 from __future__ import annotations
@@ -14,6 +13,25 @@ import os
 from typing import Any, Mapping, Optional
 
 from tts_reader.adapters.common import SpeakRequest
+
+# Clear failure / incomplete terminations — do not speak these.
+_ERROR_REASONS = frozenset({
+    "error",
+    "max_steps_exceeded",
+})
+
+
+def should_speak(payload: Mapping[str, Any]) -> bool:
+    """Speak only when the agent is fully idle and not in a clear failure."""
+    if payload.get("fullyIdle") is not True:
+        return False
+    reason = str(payload.get("terminationReason") or "").lower()
+    if reason in _ERROR_REASONS:
+        return False
+    err = payload.get("error")
+    if isinstance(err, str) and err.strip():
+        return False
+    return True
 
 
 def from_stop_payload(
@@ -25,9 +43,10 @@ def from_stop_payload(
 ) -> SpeakRequest:
     paths = payload.get("workspacePaths") or []
     cwd = paths[0] if isinstance(paths, list) and paths else os.getcwd()
+    path = payload.get("transcriptPath")
     return SpeakRequest(
         session_id=str(payload.get("conversationId") or "?"),
-        transcript_path=str(payload.get("transcriptPath") or ""),
+        transcript_path=str(path or ""),
         text=text,
         cwd=str(cwd),
         channel=channel,

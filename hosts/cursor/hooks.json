@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": "REPLACE_WITH_CHECKOUT/scripts/run REPLACE_WITH_CHECKOUT/scripts/tts_reader/hook_cursor.py",
+        "timeout": 10
+      }
+    ]
+  }
+}
