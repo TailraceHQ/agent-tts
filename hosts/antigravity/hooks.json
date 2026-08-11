@@ -1,0 +1,11 @@
+{
+  "tts": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "\"${ANTIGRAVITY_PLUGIN_ROOT}/run\" hook",
+        "timeout": 10
+      }
+    ]
+  }
+}

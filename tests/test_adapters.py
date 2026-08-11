@@ -47,7 +47,7 @@ def test_speak_request_includes_inline_text_when_set():
     assert req.to_daemon_req()["text"] == "Hello from host"
 
 
-def test_cursor_stub_maps_documented_fields():
+def test_cursor_maps_documented_fields():
     req = cursor.from_stop_payload(
         {
             "conversation_id": "c1",
@@ -63,7 +63,20 @@ def test_cursor_stub_maps_documented_fields():
     assert req.cwd == "/ws/a"
 
 
-def test_antigravity_stub_maps_documented_fields():
+def test_cursor_cwd_falls_back_to_getcwd(monkeypatch):
+    monkeypatch.setattr(cursor.os, "getcwd", lambda: "/cwd")
+    req = cursor.from_stop_payload({"conversation_id": "c", "workspace_roots": []})
+    assert req.cwd == "/cwd"
+
+
+def test_cursor_should_speak_only_when_completed():
+    assert cursor.should_speak({"status": "completed"}) is True
+    assert cursor.should_speak({"status": "aborted"}) is False
+    assert cursor.should_speak({"status": "error"}) is False
+    assert cursor.should_speak({}) is False
+
+
+def test_antigravity_maps_documented_fields():
     req = antigravity.from_stop_payload(
         {
             "conversationId": "ag1",
@@ -76,3 +89,36 @@ def test_antigravity_stub_maps_documented_fields():
     assert req.session_id == "ag1"
     assert req.transcript_path == "/ag/t.jsonl"
     assert req.cwd == "/home/proj"
+
+
+def test_antigravity_should_speak_requires_fully_idle():
+    assert antigravity.should_speak({
+        "fullyIdle": True,
+        "terminationReason": "NO_TOOL_CALL",
+    }) is True
+    assert antigravity.should_speak({
+        "fullyIdle": False,
+        "terminationReason": "NO_TOOL_CALL",
+    }) is False
+    assert antigravity.should_speak({"fullyIdle": True}) is True
+
+
+def test_antigravity_should_speak_skips_error_terminations():
+    assert antigravity.should_speak({
+        "fullyIdle": True,
+        "terminationReason": "error",
+    }) is False
+    assert antigravity.should_speak({
+        "fullyIdle": True,
+        "terminationReason": "max_steps_exceeded",
+    }) is False
+    assert antigravity.should_speak({
+        "fullyIdle": True,
+        "terminationReason": "NO_TOOL_CALL",
+        "error": "boom",
+    }) is False
+    assert antigravity.should_speak({
+        "fullyIdle": True,
+        "terminationReason": "NO_TOOL_CALL",
+        "error": "",
+    }) is True

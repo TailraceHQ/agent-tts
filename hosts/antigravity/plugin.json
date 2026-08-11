@@ -1,0 +1,5 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "tts",
+  "description": "Speaks agent responses aloud via a shared cross-platform TTS daemon (macOS/Windows/Linux, optional cloud voices). Opt-in; Stop hook is fail-open and never continues the agent loop."
+}
