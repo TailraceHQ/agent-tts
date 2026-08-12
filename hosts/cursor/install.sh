@@ -1,6 +1,6 @@
 #!/bin/sh
-# Merge-safe install of the Cursor stop hook into ~/.cursor/hooks.json
-# (or CURSOR_HOOKS_FILE). Resolves this checkout's absolute path.
+# Merge-safe install of the Cursor stop hook, /tts command, and skill.
+# Resolves this checkout's absolute path into ~/.cursor/{hooks.json,commands,skills}.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$HERE/../.." && pwd)
