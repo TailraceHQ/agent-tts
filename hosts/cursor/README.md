@@ -15,9 +15,9 @@ Same as the main [README](../../README.md): Python 3.9+, a local speech engine
 ### Recommended (`install.sh`)
 
 ```bash
-git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
-~/src/claude-code-tts/hosts/cursor/install.sh
-~/src/claude-code-tts/scripts/run ~/src/claude-code-tts/scripts/tts_reader/cli.py on
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+~/src/agent-tts/hosts/cursor/install.sh
+~/src/agent-tts/scripts/run ~/src/agent-tts/scripts/tts_reader/cli.py on
 ```
 
 `install.sh` is merge-safe and idempotent. It writes:
@@ -67,7 +67,7 @@ The command runs this checkout’s CLI and relays stdout verbatim.
 ### CLI (same entry point)
 
 ```bash
-CHECKOUT=~/src/claude-code-tts
+CHECKOUT=~/src/agent-tts
 TTS="$CHECKOUT/scripts/run $CHECKOUT/scripts/tts_reader/cli.py"
 
 $TTS on          # enable automatic speech after completed turns

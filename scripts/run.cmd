@@ -19,5 +19,5 @@ if %errorlevel%==0 (
   py -3 %*
   exit /b %errorlevel%
 )
-echo claude-code-tts: no python/py interpreter found on PATH 1>&2
+echo agent-tts: no python/py interpreter found on PATH 1>&2
 exit /b 0

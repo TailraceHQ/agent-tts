@@ -1,7 +1,7 @@
 [project]
-name = "claude-code-tts"
+name = "agent-tts"
 version = "0.1.0"
-description = "Speak Claude Code responses aloud on macOS, Windows, and Linux, with optional cloud voices (Stop-hook plugin)."
+description = "Speak agent responses aloud on macOS, Windows, and Linux (Claude Code, Cursor, Antigravity), with optional cloud voices."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"

@@ -1,1 +1,1 @@
-"""claude-code-tts: speak Claude Code responses aloud on macOS."""
+"""agent-tts: speak agent responses aloud across Claude Code, Cursor, and Antigravity."""

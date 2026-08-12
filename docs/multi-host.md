@@ -1,10 +1,9 @@
 # Multi-host TTS
 
-This repo ([TailraceHQ/claude-code-tts](https://github.com/TailraceHQ/claude-code-tts))
-started as a Claude Code plugin and is in the process of moving to a
-host-agnostic **agent-tts**. It already works with **Claude Code**, **Cursor**,
-and **Google Antigravity**: the core is host-agnostic so all three adapters
-share one daemon, config (`~/.agent-tts/`), and sanitizer.
+This repo ([TailraceHQ/agent-tts](https://github.com/TailraceHQ/agent-tts))
+is a host-agnostic **agent-tts** that began as a Claude Code plugin. It works
+with **Claude Code**, **Cursor**, and **Google Antigravity**: adapters share
+one daemon, config (`~/.agent-tts/`), and sanitizer.
 
 ## Status
 
@@ -15,15 +14,18 @@ share one daemon, config (`~/.agent-tts/`), and sanitizer.
 | 2 | Cursor packaging + install helper + discovery | Done (`hosts/cursor/`) |
 | 3 | Antigravity packaging + install helper + step reader | Done (`hosts/antigravity/` + root manifests) |
 | 4 | Cursor `/tts` command + skill install + auto-speak hardening | Done (`commands/`, `skills/tts/`, transcript fixtures) |
+| 5 | Rename to `agent-tts` + migrate legacy data dir → `~/.agent-tts` | Done |
 
 ## Locked decisions
 
 1. **Shared data directory:** canonical path is `~/.agent-tts/`. Override with
    `AGENT_TTS_DATA_DIR` when tests or a host need an explicit root. Claude’s
    former path was `~/.claude/claude-code-tts`. If the new dir does not exist
-   but the legacy dir does, the legacy dir is kept (no copy) so existing config
-   and a running daemon stay coherent. Fresh installs use `~/.agent-tts/`.
-   Hook and CLI must always resolve the same path.
+   but the legacy dir does, contents are **migrated** (copied) into
+   `~/.agent-tts/` (skipping live daemon pid/port/sock/log). The legacy dir is
+   left with a `MIGRATED_TO_AGENT_TTS` marker. Fresh installs use
+   `~/.agent-tts/`. Hook and CLI must always resolve the same path. Explicit:
+   `/tts migrate`.
 
 2. **Speak request shape:** adapters produce a shared `SpeakRequest`
    (`session_id`, `transcript_path`, optional `text`, `cwd`, `channel`,
@@ -74,4 +76,5 @@ share one daemon, config (`~/.agent-tts/`), and sanitizer.
 - Antigravity discovery without a prior Stop hook picks the newest brain
   `transcript.jsonl` globally when no project-local file exists — may be
   ambiguous across concurrent conversations.
-- Repo rename / Claude Code marketplace listing remain separate work.
+- Claude Code marketplace listing / plugin registry rename remain separate work
+  if the published marketplace still lists the former `claude-code-tts` source.

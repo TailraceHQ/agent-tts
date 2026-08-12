@@ -16,5 +16,5 @@ for py in python3 python; do
     exec "$py" "$@"
   fi
 done
-echo "claude-code-tts: no python3/python interpreter found on PATH" >&2
+echo "agent-tts: no python3/python interpreter found on PATH" >&2
 exit 0

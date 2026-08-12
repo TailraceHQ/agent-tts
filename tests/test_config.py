@@ -57,19 +57,74 @@ def test_data_dir_uses_canonical_when_fresh(monkeypatch, tmp_path):
     assert resolved.is_dir()
 
 
-def test_data_dir_keeps_legacy_when_canonical_missing(monkeypatch, tmp_path):
-    """If only ~/.claude/claude-code-tts exists, keep using it (no copy)."""
+def test_data_dir_migrates_legacy_when_canonical_missing(monkeypatch, tmp_path):
+    """If only ~/.claude/claude-code-tts exists, copy into ~/.agent-tts."""
+    fake_home = tmp_path / "home"
+    legacy = fake_home / ".claude" / "claude-code-tts"
+    legacy.mkdir(parents=True)
+    (legacy / "config.json").write_text('{"enabled": true, "wpm": 220}\n')
+    (legacy / "daemon.pid").write_text("12345\n")
+    (legacy / "last_speak.json").write_text('{"transcript_path": "/t"}\n')
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr(config, "data_dir", _real_data_dir)
+
+    resolved = _real_data_dir()
+    canonical = fake_home / ".agent-tts"
+
+    assert resolved == canonical
+    assert canonical.is_dir()
+    assert (canonical / "config.json").read_text() == '{"enabled": true, "wpm": 220}\n'
+    assert (canonical / "last_speak.json").exists()
+    # Live daemon runtime is not copied — new daemon starts under canonical.
+    assert not (canonical / "daemon.pid").exists()
+    assert (legacy / config.MIGRATED_MARKER).is_file()
+    assert config.load_config()["enabled"] is True
+    assert config.load_config()["wpm"] == 220
+
+
+def test_data_dir_falls_back_to_legacy_on_migration_failure(monkeypatch, tmp_path):
+    """A mid-copy failure must not strand the user with an empty canonical
+    dir, and the next call must retry rather than getting stuck."""
+    fake_home = tmp_path / "home"
+    legacy = fake_home / ".claude" / "claude-code-tts"
+    legacy.mkdir(parents=True)
+    (legacy / "config.json").write_text('{"enabled": true, "wpm": 220}\n')
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr(config, "data_dir", _real_data_dir)
+
+    real_copy2 = config.shutil.copy2
+
+    def _boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(config.shutil, "copy2", _boom)
+    canonical = fake_home / ".agent-tts"
+
+    resolved = _real_data_dir()
+    assert resolved == legacy
+    assert not canonical.exists()
+    assert config.load_config()["wpm"] == 220
+
+    monkeypatch.setattr(config.shutil, "copy2", real_copy2)
+    resolved_again = _real_data_dir()
+    assert resolved_again == canonical
+    assert config.load_config()["wpm"] == 220
+
+
+def test_migrate_legacy_data_dir_idempotent(monkeypatch, tmp_path):
     fake_home = tmp_path / "home"
     legacy = fake_home / ".claude" / "claude-code-tts"
     legacy.mkdir(parents=True)
     (legacy / "config.json").write_text('{"enabled": true}\n')
     monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
-    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
 
-    resolved = _real_data_dir()
-
-    assert resolved == legacy
-    assert not (fake_home / ".agent-tts").exists()
+    first = config.migrate_legacy_data_dir(home=fake_home)
+    second = config.migrate_legacy_data_dir(home=fake_home)
+    assert first["migrated"] is True
+    assert second["migrated"] is False
+    assert second["reason"] == "canonical_exists"
 
 
 def test_data_dir_prefers_canonical_when_both_exist(monkeypatch, tmp_path):
@@ -77,11 +132,15 @@ def test_data_dir_prefers_canonical_when_both_exist(monkeypatch, tmp_path):
     canonical = fake_home / ".agent-tts"
     legacy = fake_home / ".claude" / "claude-code-tts"
     canonical.mkdir(parents=True)
+    (canonical / "config.json").write_text('{"enabled": false, "wpm": 100}\n')
     legacy.mkdir(parents=True)
+    (legacy / "config.json").write_text('{"enabled": true, "wpm": 999}\n')
     monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
     monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    monkeypatch.setattr(config, "data_dir", _real_data_dir)
 
     assert _real_data_dir() == canonical
+    assert config.load_config()["wpm"] == 100
 
 
 def test_data_dir_env_override(monkeypatch, tmp_path):

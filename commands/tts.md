@@ -1,6 +1,6 @@
 ---
-description: Control text-to-speech playback of Claude's responses
-argument-hint: on|off|summary|full|replay [full|summary]|stop|preview|status|voices|voice prose <name>|voice header <name>|wpm <n>|backend <auto|macos|windows|linux|cloud>|cloud <provider|voice|key|region> <value>
+description: Control text-to-speech playback of agent responses
+argument-hint: on|off|summary|full|replay [full|summary]|stop|preview|status|migrate|voices|voice prose <name>|voice header <name>|wpm <n>|backend <auto|macos|windows|linux|cloud>|cloud <provider|voice|key|region> <value>
 allowed-tools: Bash(*)
 ---
 

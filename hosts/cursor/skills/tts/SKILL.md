@@ -18,5 +18,6 @@ Useful subcommands: `on`, `off`, `summary`, `full`, `stop`, `status`, `voices`,
 `replay`, `replay full`, `preview`, `wpm <n>`, `voice prose|header <name>`,
 `backend <auto|macos|windows|linux|cloud>`.
 
-Config is shared under `~/.agent-tts/` (or the legacy `~/.claude/claude-code-tts/`
-path when that is still in use). TTS starts disabled; run `on` once.
+Config is shared under `~/.agent-tts/`. If you still have the legacy
+`~/.claude/claude-code-tts/` directory, run `migrate` once (or let the first
+CLI/hook call migrate automatically). TTS starts disabled; run `on` once.
