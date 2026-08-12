@@ -3,6 +3,10 @@
 Documented stdin fields: conversationId, transcriptPath, workspacePaths,
 fullyIdle, terminationReason, optional error.
 
+Transcripts are step-log JSONL (``source`` / ``type`` / ``content``), not
+Claude role messages. ``transcript.read_final_text`` takes the last
+``MODEL`` + ``PLANNER_RESPONSE`` with non-empty ``content``.
+
 Always return empty stdout ``{}`` from the hook entry — never
 ``{"decision":"continue"}``, which would restart the agent loop.
 """

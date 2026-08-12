@@ -55,7 +55,7 @@ def test_wpm_validates():
 
 
 def test_replay_sends_replay_channel_request(monkeypatch, captured_sends):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     cli.main(["replay"])
     assert captured_sends and captured_sends[-1]["channel"] == "replay"
@@ -63,13 +63,13 @@ def test_replay_sends_replay_channel_request(monkeypatch, captured_sends):
 
 
 def test_replay_without_transcript(monkeypatch, capsys):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd", lambda cwd: None)
+    monkeypatch.setattr(transcript, "discover_transcript", lambda cwd: None)
     cli.main(["replay"])
     assert "nothing to replay" in capsys.readouterr().out.lower()
 
 
 def test_replay_full_overrides_configured_mode(monkeypatch, captured_sends):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     config.set_values(mode="summary")
     cli.main(["replay", "full"])
@@ -77,7 +77,7 @@ def test_replay_full_overrides_configured_mode(monkeypatch, captured_sends):
 
 
 def test_replay_summary_overrides_configured_mode(monkeypatch, captured_sends):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     config.set_values(mode="full")
     cli.main(["replay", "summary"])
@@ -85,7 +85,7 @@ def test_replay_summary_overrides_configured_mode(monkeypatch, captured_sends):
 
 
 def test_replay_defaults_to_configured_mode_without_args(monkeypatch, captured_sends):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     config.set_values(mode="full")
     cli.main(["replay"])
@@ -93,7 +93,7 @@ def test_replay_defaults_to_configured_mode_without_args(monkeypatch, captured_s
 
 
 def test_replay_rejects_bad_mode_arg(monkeypatch, capsys, captured_sends):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     cli.main(["replay", "loud"])
     assert "usage" in capsys.readouterr().out.lower()
@@ -106,7 +106,7 @@ def test_stop_sends_stop_request(captured_sends):
 
 
 def test_preview_prints_queue_without_speaking(monkeypatch, capsys):
-    monkeypatch.setattr(transcript, "latest_transcript_for_cwd",
+    monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
     monkeypatch.setattr(transcript, "read_final_text",
                         lambda *a, **k: "# Title\n\nRun build() now.\n")

@@ -9,8 +9,8 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
 | --- | --- | --- |
 | 0 | Decisions + SpeakRequest | Done |
 | 1 | Shared core + Claude adapter wiring | Done |
-| 2 | Cursor MVP packaging | Done (`hosts/cursor/`) |
-| 3 | Antigravity MVP packaging | Done (`hosts/antigravity/` + root manifests) |
+| 2 | Cursor packaging + install helper + discovery | Done (`hosts/cursor/`) |
+| 3 | Antigravity packaging + install helper + step reader | Done (`hosts/antigravity/` + root manifests) |
 
 ## Locked decisions
 
@@ -24,14 +24,17 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
 2. **Speak request shape:** adapters produce a shared `SpeakRequest`
    (`session_id`, `transcript_path`, optional `text`, `cwd`, `channel`,
    `mode`). The daemon prefers non-empty inline `text`; otherwise it reads
-   `transcript_path` with the shared JSONL reader (Claude + Cursor role-nested).
+   `transcript_path` with the shared JSONL reader.
 
 3. **Opt-in remains:** `enabled` defaults to `false`.
 
-4. **Pluggable readers:** Claude JSONL and common Cursor role-nested JSONL are
-   handled by `transcript.py`. Antigravity transcript shape is still lightly
-   validated — path is passed through; dedicated parsing can land when samples
-   differ. Inline `text` remains available for hosts that can supply it.
+4. **Pluggable readers + discovery:** `transcript.py` reads Claude
+   `type=assistant`, Cursor role-nested JSONL, and Antigravity step logs
+   (`MODEL` + `PLANNER_RESPONSE` with string `content`). Replay/preview
+   discovery order: `~/.agent-tts/last_speak.json` (written by Stop hooks),
+   then Claude `~/.claude/projects/`, Cursor
+   `~/.cursor/projects/<slug>/agent-transcripts/`, then Antigravity brain /
+   project-local `transcript.jsonl`.
 
 ## Host Stop fields
 
@@ -45,17 +48,24 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
 
 - **Claude Code:** repo root `.claude-plugin/`, `hooks/hooks.json`, `commands/tts.md`,
   `scripts/tts_reader/hook.py` (unchanged install via `--plugin-dir`).
-- **Cursor:** sample `hosts/cursor/hooks.json` → user `~/.cursor/hooks.json` or
-  project `.cursor/hooks.json` with absolute checkout paths; entry
-  `hook_cursor.py`. See `hosts/cursor/README.md`.
+- **Cursor:** run `hosts/cursor/install.sh` (merge-safe write to
+  `~/.cursor/hooks.json` with absolute checkout paths), or merge
+  `hosts/cursor/hooks.json` manually. Entry: `hook_cursor.py`. See
+  `hosts/cursor/README.md`.
 - **Antigravity:** preferred `agy plugin install <repo-root>` using root
   `plugin.json` / `hooks.json` / `skills/` (Stop → `hosts/antigravity/run`).
-  Alternative: install `hosts/antigravity` and set `AGENT_TTS_ROOT`. See
-  `hosts/antigravity/README.md`.
+  Subdir install: `hosts/antigravity/install.sh` writes `.tts_root` so `run`
+  finds `scripts/` without `AGENT_TTS_ROOT`. See `hosts/antigravity/README.md`.
 
-## Deferred
+## Known limitations
 
-- Perfect Antigravity transcript parsing if format diverges from Claude/Cursor
-- Cursor marketplace / one-click install
-- Host-specific `/tts` replay transcript discovery outside Claude’s
-  `~/.claude/projects/` layout (CLI still uses Claude paths for replay/preview)
+- Antigravity transcript parsing is based on documented step-log samples
+  (MemPalace STDIN_SHAPE + public CLI tutorials), not a long-lived live corpus
+  in CI. Unusual step `type` values or content shapes may stay silent until
+  updated; turns are never blocked.
+- Cursor marketplace / one-click store listing is out of scope (no real
+  marketplace); `install.sh` is the supported path.
+- Antigravity discovery without a prior Stop hook picks the newest brain
+  `transcript.jsonl` globally when no project-local file exists — may be
+  ambiguous across concurrent conversations.
+- Repo rename / Claude Code marketplace listing remain separate work.

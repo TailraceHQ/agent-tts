@@ -70,6 +70,12 @@ def run_stop_hook(
 
     speak = map_payload(payload, mode=cfg.get("mode", "summary"), channel=AUTO)
     req = speak.to_daemon_req()
+    # Remember path for `/tts replay` on hosts that do not use Claude's layout.
+    config.remember_last_speak(
+        req.get("transcript_path") or "",
+        cwd=req.get("cwd") or "",
+        host=host,
+    )
     resp = client.send(req)
     config.debug_log(
         f"{host}_hook_sent",

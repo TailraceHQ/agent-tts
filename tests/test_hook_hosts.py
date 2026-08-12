@@ -58,6 +58,10 @@ def test_cursor_emits_empty_object_and_speaks_when_completed(
     assert req["transcript_path"] == "/cursor/t.jsonl"
     assert req["cwd"] == "/ws"
     assert "followup_message" not in json.loads(out.getvalue())
+    remembered = config.load_last_speak()
+    assert remembered is not None
+    assert remembered["transcript_path"] == "/cursor/t.jsonl"
+    assert remembered["host"] == "cursor"
 
 
 def test_cursor_skips_aborted_but_still_prints_empty_object(

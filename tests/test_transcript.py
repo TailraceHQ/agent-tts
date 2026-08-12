@@ -120,6 +120,8 @@ def test_project_dir_slug():
 
 def test_latest_transcript_for_cwd(tmp_path, monkeypatch):
     monkeypatch.setattr(transcript, "project_dir_for_cwd", lambda cwd: tmp_path)
+    monkeypatch.setattr(transcript, "latest_cursor_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
     old = tmp_path / "old.jsonl"
     new = tmp_path / "new.jsonl"
     old.write_text("{}")
@@ -130,6 +132,8 @@ def test_latest_transcript_for_cwd(tmp_path, monkeypatch):
 
 def test_latest_transcript_none_when_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(transcript, "project_dir_for_cwd", lambda cwd: tmp_path)
+    monkeypatch.setattr(transcript, "latest_cursor_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
     assert transcript.latest_transcript_for_cwd("/anything") is None
 
 
@@ -158,3 +162,108 @@ def test_reads_cursor_role_nested_jsonl(tmp_path):
         },
     ])
     assert transcript.read_final_text(path, timeout=0.2) == "After tools."
+
+
+def test_reads_antigravity_planner_response(tmp_path):
+    """Antigravity step logs: last MODEL PLANNER_RESPONSE with content."""
+    path = _write(tmp_path / "agy.jsonl", [
+        {
+            "step_index": 0,
+            "source": "USER_EXPLICIT",
+            "type": "USER_INPUT",
+            "status": "DONE",
+            "content": "What is Cloud Run?",
+        },
+        {
+            "step_index": 2,
+            "source": "MODEL",
+            "type": "PLANNER_RESPONSE",
+            "status": "DONE",
+            "created_at": "2026-05-24T12:14:37Z",
+            "tool_calls": [{"name": "search_web", "args": {"query": "x"}}],
+        },
+        {
+            "step_index": 3,
+            "source": "MODEL",
+            "type": "SEARCH_WEB",
+            "status": "DONE",
+            "content": "Tool dump that should not be spoken.",
+        },
+        {
+            "step_index": 5,
+            "source": "MODEL",
+            "type": "PLANNER_RESPONSE",
+            "status": "DONE",
+            "created_at": "2026-05-24T12:14:46Z",
+            "content": "Google Cloud Run is a serverless platform.",
+        },
+    ])
+    assert (
+        transcript.read_final_text(path, timeout=0.2)
+        == "Google Cloud Run is a serverless platform."
+    )
+
+
+def test_cursor_project_slug():
+    assert transcript.cursor_project_slug("/Users/j/dev/proj") == "Users-j-dev-proj"
+    assert transcript.cursor_project_slug("C:\\Users\\j\\proj") == "C-Users-j-proj"
+
+
+def test_latest_cursor_transcript(tmp_path, monkeypatch):
+    proj = tmp_path / "projects" / "Users-j-dev-proj" / "agent-transcripts"
+    nested = proj / "sess-1"
+    nested.mkdir(parents=True)
+    old = nested / "sess-1.jsonl"
+    old.write_text("{}")
+    time.sleep(0.02)
+    new = proj / "sess-2.jsonl"
+    new.write_text("{}")
+    sub = proj / "sess-1" / "subagents"
+    sub.mkdir()
+    (sub / "child.jsonl").write_text("{}")
+    monkeypatch.setattr(
+        transcript, "cursor_project_dir_for_cwd",
+        lambda cwd: tmp_path / "projects" / "Users-j-dev-proj",
+    )
+    assert transcript.latest_cursor_transcript("/Users/j/dev/proj") == str(new)
+
+
+def test_latest_antigravity_transcript_prefers_newest(tmp_path, monkeypatch):
+    brain = tmp_path / "brain"
+    a = brain / "aaa" / ".system_generated" / "logs"
+    b = brain / "bbb" / ".system_generated" / "logs"
+    a.mkdir(parents=True)
+    b.mkdir(parents=True)
+    (a / "transcript.jsonl").write_text("{}")
+    time.sleep(0.02)
+    (b / "transcript.jsonl").write_text("{}")
+    monkeypatch.setattr(transcript, "antigravity_brain_roots", lambda: [brain])
+    got = transcript.latest_antigravity_transcript(str(tmp_path / "ws"))
+    assert got == str(b / "transcript.jsonl")
+
+
+def test_discover_prefers_last_speak(tmp_path, monkeypatch):
+    from tts_reader import config
+
+    remembered = tmp_path / "remembered.jsonl"
+    remembered.write_text(
+        json.dumps({
+            "role": "assistant",
+            "message": {"content": [{"type": "text", "text": "hi"}]},
+        })
+        + "\n"
+    )
+    config.remember_last_speak(str(remembered), cwd="/ws", host="cursor")
+    monkeypatch.setattr(transcript, "latest_claude_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_cursor_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
+    assert transcript.discover_transcript("/ws") == str(remembered)
+
+
+def test_discover_falls_through_hosts(monkeypatch):
+    monkeypatch.setattr(transcript, "latest_claude_transcript", lambda cwd: None)
+    monkeypatch.setattr(
+        transcript, "latest_cursor_transcript", lambda cwd: "/cursor/t.jsonl"
+    )
+    monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
+    assert transcript.discover_transcript("/ws") == "/cursor/t.jsonl"

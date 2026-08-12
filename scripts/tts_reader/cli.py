@@ -32,7 +32,8 @@ CLOUD_PROVIDERS = ("elevenlabs", "openai", "azure")
 
 
 def _current_transcript() -> str | None:
-    return transcript.latest_transcript_for_cwd(os.getcwd())
+    """Locate a transcript for replay/preview (Claude, Cursor, or Antigravity)."""
+    return transcript.discover_transcript(os.getcwd())
 
 
 def cmd_on(_):
