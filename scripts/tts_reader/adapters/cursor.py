@@ -3,10 +3,11 @@
 Documented stdin fields: conversation_id, transcript_path, workspace_roots,
 status (completed|aborted|error), hook_event_name.
 
-Transcript lines are often role-nested JSONL
-(``{"role":"assistant","message":{"content":[...]}}``). The shared transcript
-reader accepts that shape; if Cursor changes format, prefer inline ``text``
-later rather than blocking the Stop hook.
+Transcript lines are role-nested JSONL
+(``{"role":"assistant","message":{"content":[...]}}``), plus roleless status
+lines such as ``{"type":"turn_ended"}``. On-disk discovery uses
+``~/.cursor/projects/<slug>/agent-transcripts/`` when replaying without a
+hook-supplied path.
 """
 
 from __future__ import annotations

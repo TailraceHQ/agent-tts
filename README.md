@@ -140,6 +140,7 @@ Configuration and daemon state are stored under:
 ```text
 ~/.agent-tts/
   config.json
+  last_speak.json last Stop-hook transcript path (CLI replay/preview)
   daemon.log
   daemon.pid
   daemon.port     port + auth token for the loopback control channel
@@ -166,14 +167,14 @@ primary packaged host; Cursor and Antigravity MVPs live under `hosts/`. See
 
 ### Cursor
 
-1. Clone this repo to a stable path.
-2. Merge `hosts/cursor/hooks.json` into `~/.cursor/hooks.json` (user-global) or
-   `<project>/.cursor/hooks.json`, replacing `REPLACE_WITH_CHECKOUT` with the
-   absolute clone path.
-3. Enable once:
-   `scripts/run scripts/tts_reader/cli.py on`
+```bash
+git clone <repository-url> ~/src/claude-code-tts
+~/src/claude-code-tts/hosts/cursor/install.sh
+~/src/claude-code-tts/scripts/run ~/src/claude-code-tts/scripts/tts_reader/cli.py on
+```
 
-Details: [hosts/cursor/README.md](hosts/cursor/README.md).
+`install.sh` merge-safely writes absolute checkout paths into
+`~/.cursor/hooks.json`. Details: [hosts/cursor/README.md](hosts/cursor/README.md).
 
 ### Antigravity
 
@@ -184,7 +185,8 @@ agy plugin install /absolute/path/to/claude-code-tts
 /absolute/path/to/claude-code-tts/hosts/antigravity/run cli on
 ```
 
-Or install only `hosts/antigravity` and set `AGENT_TTS_ROOT` to the clone.
+Or `hosts/antigravity/install.sh subdir` (writes a `.tts_root` marker so the
+`run` shim finds `scripts/` without `AGENT_TTS_ROOT`).
 Details: [hosts/antigravity/README.md](hosts/antigravity/README.md).
 
 ## Voice quality (macOS)
@@ -416,14 +418,16 @@ commands/tts.md              Claude /tts slash command
 plugin.json                  Antigravity plugin manifest (repo-root install)
 hooks.json                   Antigravity Stop hook registration
 skills/tts/SKILL.md          Antigravity skill → cli.py
-hosts/cursor/                Cursor hooks sample + skill note
-hosts/antigravity/           Antigravity scaffold + run shim
+hosts/cursor/                Cursor hooks + install.sh + skill note
+hosts/antigravity/           Antigravity scaffold + run/install shims
 docs/multi-host.md           Multi-host decisions and status
 scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
 scripts/tts_reader/
   adapters/                  Host Stop-payload → SpeakRequest mappers
   sanitize.py                Markdown to utterance queue
-  transcript.py              Final assistant-message polling (Claude + Cursor JSONL)
+  transcript.py              Final-message polling + multi-host discovery
+  cursor_install.py          Merge-safe ~/.cursor/hooks.json writer
+
   engine/                    Pluggable speech backends + factory
     base.py                    Backend interface
     macos.py                   macOS `say`
@@ -451,11 +455,13 @@ tests/                       Unit tests (no audio required)
   and downloaded voice assets. On macOS, Siri voices cannot be selected by name.
 - The cloud backend synthesizes over the network, so its first-audio latency is
   higher than the local engines and it incurs provider usage costs.
-- The plugin reads Claude Code's internal JSONL transcript format, which is not
-  a stable public interface and may change in a future Claude Code release.
-- The transcript lookup used by `/tts replay` and `/tts preview` selects the
-  newest transcript for the current working directory. Multiple sessions in
-  the same directory can make that selection ambiguous.
+- Transcript readers cover Claude Code JSONL, Cursor role-nested JSONL, and
+  Antigravity step logs; those formats are not stable public interfaces and may
+  change. Failures stay silent rather than blocking a turn.
+- `/tts replay` and `/tts preview` prefer the last Stop-hook transcript
+  (`last_speak.json`), then host-specific locators for the current working
+  directory. Multiple sessions in the same directory can still make selection
+  ambiguous.
 - If the final transcript message is delayed by more than three seconds, the
   daemon gives up on that job silently rather than speaking anything.
 - All sessions sharing the data directory share one configuration and one

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 DEFAULT_CONFIG = {
     "enabled": False,       # opt-in: nothing speaks until `/tts on`
@@ -85,6 +86,46 @@ def debug_log_path() -> Path:
 
 def suppress_marker_path() -> Path:
     return data_dir() / "suppress_auto"
+
+
+def last_speak_path() -> Path:
+    """Pointer to the most recent auto-speak transcript (for CLI replay)."""
+    return data_dir() / "last_speak.json"
+
+
+def remember_last_speak(
+    transcript_path: str,
+    *,
+    cwd: str = "",
+    host: str = "",
+) -> None:
+    """Record the last speak job's transcript so replay works off Claude paths."""
+    if not transcript_path:
+        return
+    try:
+        import time as _time
+
+        payload = {
+            "transcript_path": transcript_path,
+            "cwd": cwd or "",
+            "host": host or "",
+            "ts": _time.time(),
+        }
+        last_speak_path().write_text(json.dumps(payload) + "\n")
+    except OSError:
+        pass
+
+
+def load_last_speak() -> Optional[dict]:
+    """Return the last-speak pointer dict, or None if missing/corrupt."""
+    p = last_speak_path()
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text())
+    except (ValueError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def mark_command_run() -> None:
