@@ -25,7 +25,7 @@ Root manifests (`plugin.json`, `hooks.json`, `skills/`) point at
 (`.claude-plugin/`, `hooks/hooks.json`, `commands/`).
 
 ```bash
-git clone <repository-url> ~/src/claude-code-tts
+git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
 
 # optional helper (records checkout markers, then runs agy):
 ~/src/claude-code-tts/hosts/antigravity/install.sh root

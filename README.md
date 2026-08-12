@@ -4,10 +4,17 @@
 [![Downloads](https://img.shields.io/github/downloads/TailraceHQ/claude-code-tts/total)](https://github.com/TailraceHQ/claude-code-tts/releases)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/claude-code-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/claude-code-tts/actions/workflows/test.yml)
 
-A cross-platform plugin that reads Claude Code's completed responses aloud on
+A cross-platform plugin that reads an agent's completed responses aloud on
 **macOS, Windows, and Linux**. It cleans up Markdown before speaking, can use
 different voices for prose and headings, and coordinates playback across
-multiple Claude Code sessions so they do not talk over one another.
+multiple sessions so they do not talk over one another.
+
+> **Moving to `agent-tts`:** this project began as a Claude Code plugin and is
+> in the process of becoming a host-agnostic **agent-tts**. It already works
+> with **Claude Code**, **Cursor**, and **Google Antigravity** through a shared
+> daemon, config (`~/.agent-tts/`), and sanitizer. See
+> [docs/multi-host.md](docs/multi-host.md) for host wiring, and the per-host
+> guides under [`hosts/`](hosts/).
 
 The plugin is opt-in and uses only Python's standard library. By default it
 drives each operating system's built-in speech engine, so nothing is sent to an
@@ -46,7 +53,7 @@ This repository is currently a standalone plugin, not a Claude Code marketplace.
 Clone it, then load the checkout directly:
 
 ```bash
-git clone <repository-url> ~/src/claude-code-tts
+git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
 claude --plugin-dir ~/src/claude-code-tts
 ```
 
@@ -168,13 +175,15 @@ primary packaged host; Cursor and Antigravity MVPs live under `hosts/`. See
 ### Cursor
 
 ```bash
-git clone <repository-url> ~/src/claude-code-tts
+git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
 ~/src/claude-code-tts/hosts/cursor/install.sh
-~/src/claude-code-tts/scripts/run ~/src/claude-code-tts/scripts/tts_reader/cli.py on
+# then in Agent chat: /tts on
+# (or) ~/src/claude-code-tts/scripts/run ~/src/claude-code-tts/scripts/tts_reader/cli.py on
 ```
 
 `install.sh` merge-safely writes absolute checkout paths into
-`~/.cursor/hooks.json`. Full install, CLI usage, and uninstall notes:
+`~/.cursor/hooks.json`, and installs `/tts` as `~/.cursor/commands/tts.md`
+plus `~/.cursor/skills/tts/SKILL.md`. Full install, usage, and uninstall notes:
 [hosts/cursor/README.md](hosts/cursor/README.md).
 
 ### Antigravity
@@ -419,7 +428,7 @@ commands/tts.md              Claude /tts slash command
 plugin.json                  Antigravity plugin manifest (repo-root install)
 hooks.json                   Antigravity Stop hook registration
 skills/tts/SKILL.md          Antigravity skill → cli.py
-hosts/cursor/                Cursor hooks + install.sh + skill note
+hosts/cursor/                Cursor hooks + install.sh + /tts command + skill
 hosts/antigravity/           Antigravity scaffold + run/install shims
 docs/multi-host.md           Multi-host decisions and status
 scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
@@ -427,7 +436,7 @@ scripts/tts_reader/
   adapters/                  Host Stop-payload → SpeakRequest mappers
   sanitize.py                Markdown to utterance queue
   transcript.py              Final-message polling + multi-host discovery
-  cursor_install.py          Merge-safe ~/.cursor/hooks.json writer
+  cursor_install.py          Merge-safe Cursor hooks + /tts command/skill writer
 
   engine/                    Pluggable speech backends + factory
     base.py                    Backend interface
