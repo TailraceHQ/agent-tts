@@ -103,7 +103,7 @@ def _synth_azure(text, voice, wpm, key, cloud) -> Optional[Tuple[bytes, str]]:
         "Ocp-Apim-Subscription-Key": key,
         "Content-Type": "application/ssml+xml",
         "X-Microsoft-OutputFormat": "riff-24khz-16bit-mono-pcm",
-        "User-Agent": "claude-code-tts",
+        "User-Agent": "agent-tts",
     })
     return (audio, ".wav") if audio else None
 

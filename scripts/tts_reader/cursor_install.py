@@ -122,7 +122,7 @@ def install(
     """Install stop hook (+ optional slash command/skill); return paths."""
     root = (checkout or default_checkout_root()).resolve()
     if not (root / "scripts" / "tts_reader" / "hook_cursor.py").is_file():
-        raise SystemExit(f"not a claude-code-tts checkout: {root}")
+        raise SystemExit(f"not an agent-tts checkout: {root}")
     dest = hooks_file or Path.home() / ".cursor" / "hooks.json"
     existing = load_hooks_file(dest)
     doc = merge_cursor_hooks(existing, root)

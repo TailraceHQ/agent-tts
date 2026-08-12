@@ -22,7 +22,7 @@ from tts_reader.sanitize import sanitize  # noqa: E402
 
 USAGE = (
     "usage: /tts <on|off|summary|full|replay [full|summary]|stop|preview|"
-    "status|voices|voice prose|header <name>|wpm <n>|"
+    "status|migrate|voices|voice prose|header <name>|wpm <n>|"
     "backend <auto|macos|windows|linux|cloud>|"
     "cloud <provider|voice|key|region> <value>>"
 )
@@ -143,6 +143,7 @@ def cmd_status(_):
         f"prose_voice={cfg['prose_voice'] or 'system default'}  "
         f"header_voice={cfg['header_voice'] or '(same as prose)'}  dual_voice={dv}",
         f"backend={cfg.get('backend', 'auto')}",
+        f"data_dir={config.data_dir()}",
     ]
     if cfg.get("backend") == "cloud":
         cl = cfg.get("cloud", {})
@@ -152,6 +153,30 @@ def cmd_status(_):
             f"voice={cl.get('voice') or '(provider default)'}  api_key={has_key}"
         )
     return "\n".join(lines)
+
+
+def cmd_migrate(_):
+    """Copy legacy ~/.claude/claude-code-tts → ~/.agent-tts if needed."""
+    result = config.migrate_legacy_data_dir()
+    path = result.get("path") or str(config.canonical_data_dir())
+    if result.get("migrated"):
+        copied = ", ".join(result.get("copied") or []) or "(nothing new)"
+        legacy = result.get("legacy", "")
+        return (
+            f"Migrated to {path}\n"
+            f"copied: {copied}\n"
+            f"legacy left at {legacy} (safe to delete after confirming TTS works)."
+        )
+    reason = result.get("reason")
+    if reason == "no_legacy":
+        return f"Nothing to migrate; using {path}."
+    if reason == "canonical_exists":
+        legacy = result.get("legacy")
+        extra = f"\nlegacy still present at {legacy}" if legacy else ""
+        return f"Already using {path}.{extra}"
+    if reason == "error":
+        return f"Migration failed: {result.get('error')}"
+    return f"Nothing to migrate ({reason}); using {path}."
 
 
 def cmd_preview(_):
@@ -188,6 +213,7 @@ COMMANDS = {
     "preview": cmd_preview,
     "backend": cmd_backend,
     "cloud": cmd_cloud,
+    "migrate": cmd_migrate,
 }
 
 

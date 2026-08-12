@@ -156,6 +156,17 @@ def test_status_shows_backend_and_cloud(capsys):
     out = capsys.readouterr().out
     assert "backend=cloud" in out
     assert "provider=openai" in out
+    assert "data_dir=" in out
+
+
+def test_migrate_reports_no_legacy(capsys, monkeypatch, tmp_path):
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda cls: fake_home))
+    monkeypatch.delenv(config.DATA_DIR_ENV, raising=False)
+    cli.main(["migrate"])
+    out = capsys.readouterr().out
+    assert "nothing to migrate" in out.lower() or "using" in out.lower()
 
 
 def test_unknown_subcommand(capsys):
@@ -165,11 +176,13 @@ def test_unknown_subcommand(capsys):
 
 def test_no_args_prints_usage(capsys):
     cli.main([])
-    assert "usage" in capsys.readouterr().out.lower()
+    out = capsys.readouterr().out.lower()
+    assert "usage" in out
+    assert "migrate" in out
 
 
 @pytest.mark.parametrize("argv", [
-    ["on"], ["off"], ["summary"], ["full"], ["stop"], ["status"],
+    ["on"], ["off"], ["summary"], ["full"], ["stop"], ["status"], ["migrate"],
     ["wpm", "180"], ["voice", "prose", "Alex"],
 ])
 def test_every_command_marks_suppression(argv, capsys):

@@ -25,15 +25,15 @@ Root manifests (`plugin.json`, `hooks.json`, `skills/`) point at
 (`.claude-plugin/`, `hooks/hooks.json`, `commands/`).
 
 ```bash
-git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
 
 # optional helper (records checkout markers, then runs agy):
-~/src/claude-code-tts/hosts/antigravity/install.sh root
+~/src/agent-tts/hosts/antigravity/install.sh root
 
 # or install directly:
-agy plugin install ~/src/claude-code-tts
+agy plugin install ~/src/agent-tts
 
-~/src/claude-code-tts/hosts/antigravity/run cli on
+~/src/agent-tts/hosts/antigravity/run cli on
 ```
 
 ### Alternative: `hosts/antigravity` only
@@ -43,7 +43,7 @@ Antigravity copies this directory (writes `.tts_root` and
 `~/.agent-tts/checkout`):
 
 ```bash
-~/src/claude-code-tts/hosts/antigravity/install.sh subdir
+~/src/agent-tts/hosts/antigravity/install.sh subdir
 "${ANTIGRAVITY_PLUGIN_ROOT}/run" cli on
 ```
 
@@ -106,7 +106,7 @@ directly.
 From the checkout, without relying on the skill:
 
 ```bash
-CHECKOUT=~/src/claude-code-tts
+CHECKOUT=~/src/agent-tts
 "$CHECKOUT/hosts/antigravity/run" cli on
 "$CHECKOUT/hosts/antigravity/run" cli status
 "$CHECKOUT/hosts/antigravity/run" cli replay

@@ -2,8 +2,10 @@
 
 Canonical data dir is ``~/.agent-tts`` (shared across hosts). Override with
 ``AGENT_TTS_DATA_DIR``. If the canonical dir is missing but the legacy Claude
-path ``~/.claude/claude-code-tts`` still exists, that legacy dir is used so
-existing config and daemon state stay coherent.
+path ``~/.claude/claude-code-tts`` still exists, that legacy dir is **migrated**
+(copied) into ``~/.agent-tts`` so existing config stays coherent. Live daemon
+runtime files (pid/port/sock/log) are skipped so a new daemon starts under the
+canonical path. The legacy directory is left in place with a marker file.
 
 This deliberately does NOT use ``$CLAUDE_PLUGIN_DATA``: Claude Code only
 injects that env var into hook subprocesses, not into the inline ``!`` bash
@@ -17,8 +19,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 DEFAULT_CONFIG = {
     "enabled": False,       # opt-in: nothing speaks until `/tts on`
@@ -38,6 +41,126 @@ DEFAULT_CONFIG = {
 DATA_DIR_ENV = "AGENT_TTS_DATA_DIR"
 CANONICAL_DIRNAME = ".agent-tts"
 LEGACY_RELATIVE = (".claude", "claude-code-tts")
+# Do not copy live daemon runtime — a new daemon binds under the canonical dir.
+MIGRATE_SKIP = frozenset({
+    "daemon.pid",
+    "daemon.port",
+    "daemon.sock",
+    "daemon.log",
+})
+MIGRATED_MARKER = "MIGRATED_TO_AGENT_TTS"
+
+
+def canonical_data_dir(home: Optional[Path] = None) -> Path:
+    return (home or Path.home()) / CANONICAL_DIRNAME
+
+
+def legacy_data_dir(home: Optional[Path] = None) -> Path:
+    return (home or Path.home()).joinpath(*LEGACY_RELATIVE)
+
+
+def migrate_legacy_data_dir(
+    *,
+    home: Optional[Path] = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Copy legacy ``~/.claude/claude-code-tts`` into ``~/.agent-tts`` if needed.
+
+    Copies into a staging directory first and only publishes it via an atomic
+    rename, so a mid-copy failure (disk full, unreadable file, ...) never
+    leaves ``~/.agent-tts`` half-populated - the canonical dir either appears
+    fully migrated or not at all, and a failed attempt can always be retried.
+    This also makes concurrent callers (e.g. the Stop hook and the CLI running
+    at once) safe: whichever finishes first publishes canonical, the other
+    discards its staging copy.
+
+    Returns a status dict with keys such as ``migrated``, ``reason``, ``path``,
+    ``legacy``, and ``copied``. Safe to call repeatedly.
+    """
+    home_path = home or Path.home()
+    canonical = canonical_data_dir(home_path)
+    legacy = legacy_data_dir(home_path)
+
+    if not legacy.is_dir():
+        return {
+            "migrated": False,
+            "reason": "no_legacy",
+            "path": str(canonical),
+        }
+
+    if canonical.exists() and not force:
+        return {
+            "migrated": False,
+            "reason": "canonical_exists",
+            "path": str(canonical),
+            "legacy": str(legacy),
+        }
+
+    staging = canonical.parent / f".{CANONICAL_DIRNAME}.migrating-{os.getpid()}"
+    copied: List[str] = []
+    try:
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        for src in sorted(legacy.iterdir()):
+            name = src.name
+            if name in MIGRATE_SKIP or name == MIGRATED_MARKER:
+                continue
+            dest = staging / name
+            if src.is_file():
+                shutil.copy2(src, dest)
+                copied.append(name)
+            elif src.is_dir():
+                shutil.copytree(src, dest)
+                copied.append(name + "/")
+
+        if canonical.exists():
+            if not force:
+                # Another process published canonical while we were copying.
+                shutil.rmtree(staging, ignore_errors=True)
+                return {
+                    "migrated": False,
+                    "reason": "canonical_exists",
+                    "path": str(canonical),
+                    "legacy": str(legacy),
+                }
+            shutil.rmtree(canonical)
+        staging.rename(canonical)
+
+        marker = legacy / MIGRATED_MARKER
+        marker.write_text(
+            f"Migrated to {canonical}\n"
+            f"Safe to delete this legacy directory after confirming TTS works.\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        shutil.rmtree(staging, ignore_errors=True)
+        return {
+            "migrated": False,
+            "reason": "error",
+            "error": repr(exc),
+            "path": str(canonical),
+            "legacy": str(legacy),
+            "copied": copied,
+        }
+
+    try:
+        debug_log(
+            "migrated_legacy_data_dir",
+            legacy=str(legacy),
+            canonical=str(canonical),
+            copied=copied,
+        )
+    except Exception:
+        pass
+
+    return {
+        "migrated": True,
+        "reason": "copied",
+        "path": str(canonical),
+        "legacy": str(legacy),
+        "copied": copied,
+    }
 
 
 def data_dir() -> Path:
@@ -49,16 +172,20 @@ def data_dir() -> Path:
         return d
 
     home = Path.home()
-    canonical = home / CANONICAL_DIRNAME
-    legacy = home.joinpath(*LEGACY_RELATIVE)
-    # Prefer the new shared dir; keep using legacy if it's the only one present
-    # so existing config.json / daemon.port stay where they already are.
-    if canonical.exists() or not legacy.exists():
-        d = canonical
-    else:
-        d = legacy
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    canonical = canonical_data_dir(home)
+    legacy = legacy_data_dir(home)
+    # Prefer canonical. If only legacy exists, try to migrate. If migration
+    # doesn't complete (error, or another process wins the race), fall back
+    # to legacy so existing config/daemon state stay reachable - migration
+    # is atomic (see migrate_legacy_data_dir), so partial copies never leave
+    # canonical half-populated, and this same check will retry it next time.
+    if not canonical.exists() and legacy.is_dir():
+        migrate_legacy_data_dir(home=home)
+
+    if canonical.exists() or not legacy.is_dir():
+        canonical.mkdir(parents=True, exist_ok=True)
+        return canonical
+    return legacy
 
 
 def config_path() -> Path:
@@ -173,7 +300,6 @@ def debug_log(event: str, **fields) -> None:
     record what it saw without needing the daemon's log handle.
     """
     try:
-        import json
         import time as _time
 
         line = json.dumps({"ts": _time.time(), "event": event, **fields})

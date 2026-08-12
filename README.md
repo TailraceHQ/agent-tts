@@ -1,20 +1,18 @@
-# claude-code-tts
+# agent-tts
 
-[![License: MIT](https://img.shields.io/github/license/TailraceHQ/claude-code-tts)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/TailraceHQ/claude-code-tts/total)](https://github.com/TailraceHQ/claude-code-tts/releases)
-[![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/claude-code-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/claude-code-tts/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/github/license/TailraceHQ/agent-tts)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/TailraceHQ/agent-tts/total)](https://github.com/TailraceHQ/agent-tts/releases)
+[![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/agent-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/agent-tts/actions/workflows/test.yml)
 
 A cross-platform plugin that reads an agent's completed responses aloud on
 **macOS, Windows, and Linux**. It cleans up Markdown before speaking, can use
 different voices for prose and headings, and coordinates playback across
 multiple sessions so they do not talk over one another.
 
-> **Moving to `agent-tts`:** this project began as a Claude Code plugin and is
-> in the process of becoming a host-agnostic **agent-tts**. It already works
-> with **Claude Code**, **Cursor**, and **Google Antigravity** through a shared
-> daemon, config (`~/.agent-tts/`), and sanitizer. See
-> [docs/multi-host.md](docs/multi-host.md) for host wiring, and the per-host
-> guides under [`hosts/`](hosts/).
+**agent-tts** is host-agnostic: it works with **Claude Code**, **Cursor**, and
+**Google Antigravity** through a shared daemon, config (`~/.agent-tts/`), and
+sanitizer. See [docs/multi-host.md](docs/multi-host.md) for host wiring, and
+the per-host guides under [`hosts/`](hosts/).
 
 The plugin is opt-in and uses only Python's standard library. By default it
 drives each operating system's built-in speech engine, so nothing is sent to an
@@ -53,8 +51,8 @@ This repository is currently a standalone plugin, not a Claude Code marketplace.
 Clone it, then load the checkout directly:
 
 ```bash
-git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
-claude --plugin-dir ~/src/claude-code-tts
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+claude --plugin-dir ~/src/agent-tts
 ```
 
 `--plugin-dir` loads the plugin for that Claude Code process. Use an absolute
@@ -63,7 +61,7 @@ add a shell function to `~/.zshrc`:
 
 ```bash
 claude() {
-  command claude --plugin-dir "$HOME/src/claude-code-tts" "$@"
+  command claude --plugin-dir "$HOME/src/agent-tts" "$@"
 }
 ```
 
@@ -157,8 +155,12 @@ Configuration and daemon state are stored under:
 
 Override with `AGENT_TTS_DATA_DIR` if needed. If `~/.agent-tts` does not exist
 but the legacy Claude path `~/.claude/claude-code-tts` does, that legacy
-directory is kept so existing settings and a running daemon stay coherent.
-Fresh installs use `~/.agent-tts`.
+directory is **migrated** (copied) into `~/.agent-tts` automatically on first
+use. Live daemon runtime files (`daemon.pid` / `daemon.port` / `daemon.sock` /
+`daemon.log`) are skipped so a new daemon starts under the canonical path; the
+legacy directory is left in place with a `MIGRATED_TO_AGENT_TTS` marker. Run
+`/tts migrate` to migrate explicitly, or `/tts status` to confirm `data_dir`.
+Fresh installs use `~/.agent-tts` directly.
 
 This path is shared by the Stop hook and `/tts` CLI rather than derived from
 `$CLAUDE_PLUGIN_DATA`: Claude Code only injects that env var into hook
@@ -175,10 +177,10 @@ primary packaged host; Cursor and Antigravity MVPs live under `hosts/`. See
 ### Cursor
 
 ```bash
-git clone https://github.com/TailraceHQ/claude-code-tts.git ~/src/claude-code-tts
-~/src/claude-code-tts/hosts/cursor/install.sh
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+~/src/agent-tts/hosts/cursor/install.sh
 # then in Agent chat: /tts on
-# (or) ~/src/claude-code-tts/scripts/run ~/src/claude-code-tts/scripts/tts_reader/cli.py on
+# (or) ~/src/agent-tts/scripts/run ~/src/agent-tts/scripts/tts_reader/cli.py on
 ```
 
 `install.sh` merge-safely writes absolute checkout paths into
@@ -191,8 +193,8 @@ plus `~/.cursor/skills/tts/SKILL.md`. Full install, usage, and uninstall notes:
 Preferred (whole checkout so `scripts/` is available after install):
 
 ```bash
-agy plugin install /absolute/path/to/claude-code-tts
-/absolute/path/to/claude-code-tts/hosts/antigravity/run cli on
+agy plugin install /absolute/path/to/agent-tts
+/absolute/path/to/agent-tts/hosts/antigravity/run cli on
 ```
 
 Or `hosts/antigravity/install.sh subdir` (writes a `.tts_root` marker so the
@@ -349,7 +351,7 @@ The built-in file-extension pronunciation map is
 Because the plugin is loaded from a Git checkout, update that checkout:
 
 ```bash
-cd ~/src/claude-code-tts
+cd ~/src/agent-tts
 git pull --ff-only
 ```
 
@@ -361,8 +363,6 @@ code changes immediately, stop it after playback has finished:
 
 ```bash
 data_dir="${AGENT_TTS_DATA_DIR:-$HOME/.agent-tts}"
-# legacy Claude path, if you have not migrated yet:
-# data_dir="$HOME/.claude/claude-code-tts"
 test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
 ```
 
@@ -371,27 +371,28 @@ The next response starts the updated daemon automatically.
 ## Uninstall
 
 1. Run `/tts off` to stop playback and disable the plugin.
-2. Remove `--plugin-dir ~/src/claude-code-tts` from your Claude Code command or
+2. Remove `--plugin-dir ~/src/agent-tts` from your Claude Code command or
    remove the shell function shown above.
 3. Close Claude Code sessions that loaded the plugin.
 4. Stop the detached daemon so previously queued responses cannot continue:
 
    ```bash
    data_dir="${AGENT_TTS_DATA_DIR:-$HOME/.agent-tts}"
-   # or: data_dir="$HOME/.claude/claude-code-tts"
    test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
    ```
 
 5. Delete the source checkout:
 
    ```bash
-   rm -rf ~/src/claude-code-tts
+   rm -rf ~/src/agent-tts
    ```
 
 6. Optionally remove saved settings and logs:
 
    ```bash
    rm -rf "$data_dir"
+   # and, if present after migration:
+   # rm -rf ~/.claude/claude-code-tts
    ```
 
 ## Development
@@ -400,7 +401,7 @@ Clone the repository, create a virtual environment, and install the test
 dependency:
 
 ```bash
-cd ~/src/claude-code-tts
+cd ~/src/agent-tts
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install "pytest>=7"
@@ -416,8 +417,7 @@ claude --plugin-dir "$PWD"
 
 Then run `/tts on`, ask Claude a question, and use `/tts preview`, `/tts status`,
 and `/tts replay` to inspect the result. Runtime logs are in
-`~/.agent-tts/daemon.log` (or the legacy `~/.claude/claude-code-tts/` path),
-plus `debug.log` for hook/daemon tracing.
+`~/.agent-tts/daemon.log` (plus `debug.log` for hook/daemon tracing).
 
 Project layout:
 
