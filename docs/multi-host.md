@@ -1,7 +1,10 @@
 # Multi-host TTS
 
-This repo started as a Claude Code plugin. The core is host-agnostic so Cursor
-and Google Antigravity adapters share one daemon, config, and sanitizer.
+This repo ([TailraceHQ/claude-code-tts](https://github.com/TailraceHQ/claude-code-tts))
+started as a Claude Code plugin and is in the process of moving to a
+host-agnostic **agent-tts**. It already works with **Claude Code**, **Cursor**,
+and **Google Antigravity**: the core is host-agnostic so all three adapters
+share one daemon, config (`~/.agent-tts/`), and sanitizer.
 
 ## Status
 
@@ -11,6 +14,7 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
 | 1 | Shared core + Claude adapter wiring | Done |
 | 2 | Cursor packaging + install helper + discovery | Done (`hosts/cursor/`) |
 | 3 | Antigravity packaging + install helper + step reader | Done (`hosts/antigravity/` + root manifests) |
+| 4 | Cursor `/tts` command + skill install + auto-speak hardening | Done (`commands/`, `skills/tts/`, transcript fixtures) |
 
 ## Locked decisions
 
@@ -49,8 +53,9 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
 - **Claude Code:** repo root `.claude-plugin/`, `hooks/hooks.json`, `commands/tts.md`,
   `scripts/tts_reader/hook.py` (unchanged install via `--plugin-dir`).
 - **Cursor:** run `hosts/cursor/install.sh` (merge-safe write to
-  `~/.cursor/hooks.json` with absolute checkout paths), or merge
-  `hosts/cursor/hooks.json` manually. Entry: `hook_cursor.py`.
+  `~/.cursor/hooks.json`, plus `~/.cursor/commands/tts.md` and
+  `~/.cursor/skills/tts/SKILL.md` with absolute checkout paths), or merge
+  templates under `hosts/cursor/` manually. Entry: `hook_cursor.py`.
   **Install + usage:** [hosts/cursor/README.md](../hosts/cursor/README.md).
 - **Antigravity:** preferred `agy plugin install <repo-root>` using root
   `plugin.json` / `hooks.json` / `skills/` (Stop → `hosts/antigravity/run`).
