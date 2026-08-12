@@ -10,7 +10,9 @@ block has actually landed.
 Supported JSONL shapes (defensive; host formats can change):
 
 * Claude Code: ``type=assistant`` + ``message.content`` text blocks
-* Cursor: role-nested ``role=assistant`` + ``message.content``
+* Cursor: role-nested ``role=assistant`` + ``message.content``; prefers
+  text-only finals over ``text``+``tool_use`` preambles; treats
+  ``turn_ended`` as a settle signal when only a preamble is present
 * Antigravity: step logs with ``source=MODEL``, ``type=PLANNER_RESPONSE``,
   string ``content`` (see MemPalace / Antigravity docs)
 
@@ -154,26 +156,47 @@ def _entry_timestamp(obj: dict) -> float:
     return 0.0
 
 
-def _claude_or_cursor_text(obj: dict) -> str:
-    """Extract text from Claude type=assistant or Cursor role-nested lines."""
+def _is_cursor_role_line(obj: dict) -> bool:
+    """Cursor agent-transcripts use top-level ``role`` (no Claude ``type``)."""
+    return obj.get("role") in ("assistant", "user") and "type" not in obj
+
+
+def _is_cursor_turn_ended(obj: dict) -> bool:
+    return obj.get("type") == "turn_ended"
+
+
+def _text_and_tool_use(obj: dict) -> Tuple[str, bool]:
+    """Return (assistant text, has_tool_use) for Claude/Cursor message shapes."""
     msg = obj.get("message", obj)
     role = obj.get("type") or obj.get("role") or (
         msg.get("role") if isinstance(msg, dict) else None
     )
     if role not in ("assistant",):
-        return ""
+        return "", False
     if not isinstance(msg, dict):
-        return ""
+        return "", False
     content = msg.get("content")
     if isinstance(content, str):
-        return content.strip()
+        return content.strip(), False
     if not isinstance(content, list):
-        return ""
+        return "", False
     parts = []
+    has_tool = False
     for block in content:
-        if isinstance(block, dict) and block.get("type") == "text":
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
             parts.append(block.get("text", ""))
-    return "".join(parts).strip()
+        elif btype == "tool_use":
+            has_tool = True
+    return "".join(parts).strip(), has_tool
+
+
+def _claude_or_cursor_text(obj: dict) -> str:
+    """Extract text from Claude type=assistant or Cursor role-nested lines."""
+    text, _has_tool = _text_and_tool_use(obj)
+    return text
 
 
 def _antigravity_text(obj: dict) -> str:
@@ -210,9 +233,26 @@ def _assistant_text(obj: dict) -> str:
     return _claude_or_cursor_text(obj)
 
 
-def _scan_final(path: str) -> Tuple[Optional[str], float]:
-    """Return (last non-empty assistant text, its timestamp) from the file."""
+def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
+    """Return ``(text, timestamp, settled)`` from the transcript file.
+
+    For Cursor role-nested JSONL, a turn often emits several assistant lines
+    that mix prose with ``tool_use`` before a final text-only answer (and a
+    ``turn_ended`` marker). Prefer the last text-only assistant message after
+    the latest user line; keep ``settled=False`` while we only have
+    tool-accompanied preambles and no ``turn_ended`` yet.
+
+    Claude / Antigravity paths treat any extracted assistant text as settled.
+    """
     text, ts = None, 0.0
+    settled = False
+    # Cursor turn state (reset on each user line).
+    turn_text: Optional[str] = None
+    turn_ts = 0.0
+    turn_final_text: Optional[str] = None  # text without tool_use
+    turn_final_ts = 0.0
+    turn_ended = False
+    saw_cursor = False
     try:
         with open(path, "r", encoding="utf-8") as fh:
             for line in fh:
@@ -223,12 +263,48 @@ def _scan_final(path: str) -> Tuple[Optional[str], float]:
                     obj = json.loads(line)
                 except ValueError:
                     continue
+                if not isinstance(obj, dict):
+                    continue
+
+                if _is_cursor_turn_ended(obj):
+                    saw_cursor = True
+                    turn_ended = True
+                    continue
+
+                if _is_cursor_role_line(obj):
+                    saw_cursor = True
+                    if obj.get("role") == "user":
+                        turn_text = None
+                        turn_ts = 0.0
+                        turn_final_text = None
+                        turn_final_ts = 0.0
+                        turn_ended = False
+                        continue
+                    chunk, has_tool = _text_and_tool_use(obj)
+                    if not chunk:
+                        continue
+                    turn_text, turn_ts = chunk, _entry_timestamp(obj)
+                    if not has_tool:
+                        turn_final_text, turn_final_ts = chunk, turn_ts
+                    continue
+
+                # Claude / Antigravity (and any non-Cursor assistant shape).
                 t = _assistant_text(obj)
                 if t:
                     text, ts = t, _entry_timestamp(obj)
+                    settled = True
     except OSError:
-        return None, 0.0
-    return text, ts
+        return None, 0.0, False
+
+    if saw_cursor:
+        if turn_final_text:
+            return turn_final_text, turn_final_ts, True
+        if turn_text:
+            # Preamble-only so far: settled only once Cursor marks the turn done.
+            return turn_text, turn_ts, turn_ended
+        return None, 0.0, False
+
+    return text, ts, settled
 
 
 def read_final_text(
@@ -236,20 +312,21 @@ def read_final_text(
 ) -> Optional[str]:
     """Poll ``path`` until the turn's final assistant text is present.
 
-    By the time the Stop hook fires, the turn's own text is already flushed
-    to disk - ``_scan_final`` reads to the true end of the (append-only) file,
-    so the first scan already returns this turn's answer, not a stale one.
-    The poll loop exists only for the rare case where the transcript write is
-    still lagging: keep checking until *some* assistant text shows up, capped
-    by ``timeout``.
+    By the time the Stop hook fires, the turn's own text is usually flushed
+    to disk. The poll loop covers lagging writes and Cursor's multi-step
+    assistant lines (wait for a text-only final or ``turn_ended`` when we only
+    have tool-accompanied preambles). On timeout, return the best text found.
     """
     if not path or not Path(path).exists():
         return None
     deadline = time.time() + timeout
+    best: Optional[str] = None
     while True:
-        text, _ts = _scan_final(path)
+        text, _ts, settled = _scan_final(path)
         if text:
-            return text
+            best = text
+            if settled:
+                return text
         if time.time() >= deadline:
-            return None
+            return best
         time.sleep(poll)

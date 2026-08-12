@@ -7,6 +7,7 @@ don't read the previous turn, and locate a session's transcript by cwd.
 
 import json
 import time
+from pathlib import Path
 
 from tts_reader import transcript
 
@@ -148,20 +149,137 @@ def test_reads_cursor_role_nested_jsonl(tmp_path):
             "role": "assistant",
             "message": {
                 "content": [
-                    {"type": "text", "text": "Cursor final answer."},
+                    {"type": "text", "text": "Let me look."},
                     {"type": "tool_use", "name": "Shell", "input": {}},
                 ]
             },
         },
-        {"type": "turn_ended", "status": "success"},
         {
             "role": "assistant",
             "message": {
                 "content": [{"type": "text", "text": "After tools."}]
             },
         },
+        {"type": "turn_ended", "status": "success"},
     ])
     assert transcript.read_final_text(path, timeout=0.2) == "After tools."
+
+
+def test_cursor_prefers_text_only_over_tool_preamble(tmp_path):
+    """Live Cursor turns emit text+tool_use preambles before a text-only final."""
+    path = _write(tmp_path / "cursor.jsonl", [
+        {
+            "role": "user",
+            "message": {"content": [{"type": "text", "text": "hi"}]},
+        },
+        {
+            "role": "assistant",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "I'll check that."},
+                    {"type": "tool_use", "name": "Read", "input": {}},
+                ]
+            },
+        },
+        {
+            "role": "assistant",
+            "message": {
+                "content": [{"type": "text", "text": "Here is the real answer."}]
+            },
+        },
+        {"type": "turn_ended", "status": "success"},
+    ])
+    assert transcript.read_final_text(path, timeout=0.2) == "Here is the real answer."
+
+
+def test_cursor_fixture_picks_last_completed_turn():
+    """Regression against a sanitized live Cursor agent-transcript shape."""
+    root = Path(__file__).resolve().parent
+    path = root / "fixtures" / "cursor" / "agent_transcript.jsonl"
+    assert (
+        transcript.read_final_text(str(path), timeout=0.2)
+        == "Ship Cursor slash commands next, then harden auto-speak."
+    )
+
+
+def test_cursor_waits_for_text_only_final(tmp_path):
+    """While only a tool preamble exists, keep polling for the text-only final."""
+    path = tmp_path / "cursor.jsonl"
+    path.write_text(
+        "\n".join([
+            json.dumps({
+                "role": "user",
+                "message": {"content": [{"type": "text", "text": "hi"}]},
+            }),
+            json.dumps({
+                "role": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": "Looking now."},
+                        {"type": "tool_use", "name": "Shell", "input": {}},
+                    ]
+                },
+            }),
+        ])
+        + "\n"
+    )
+
+    def _append_final():
+        time.sleep(0.2)
+        with open(path, "a") as fh:
+            fh.write(json.dumps({
+                "role": "assistant",
+                "message": {
+                    "content": [{"type": "text", "text": "Done."}]
+                },
+            }) + "\n")
+            fh.write(json.dumps({"type": "turn_ended", "status": "success"}) + "\n")
+
+    import threading
+    threading.Thread(target=_append_final).start()
+    got = transcript.read_final_text(str(path), timeout=2.0, poll=0.05)
+    assert got == "Done."
+
+
+def test_cursor_e2e_hook_remember_discover_read(tmp_path, monkeypatch):
+    """Stop hook → last_speak.json → discover → read_final_text (no audio)."""
+    import io
+
+    from tts_reader import client, config, hook_cursor
+
+    fixture = Path(__file__).resolve().parent / "fixtures" / "cursor" / "agent_transcript.jsonl"
+    transcript_path = tmp_path / "sess.jsonl"
+    transcript_path.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+    sends = []
+    monkeypatch.setattr(client, "send", lambda req: sends.append(req) or {"ok": True})
+    config.set_values(enabled=True, mode="full")
+    payload = {
+        "conversation_id": "sess-1",
+        "transcript_path": str(transcript_path),
+        "workspace_roots": [str(tmp_path)],
+        "status": "completed",
+        "hook_event_name": "stop",
+    }
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    out = io.StringIO()
+    monkeypatch.setattr("sys.stdout", out)
+    hook_cursor.main()
+
+    assert out.getvalue() == "{}\n"
+    assert len(sends) == 1
+    remembered = config.load_last_speak()
+    assert remembered is not None
+    assert remembered["transcript_path"] == str(transcript_path)
+    assert remembered["host"] == "cursor"
+    monkeypatch.setattr(transcript, "latest_claude_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_cursor_transcript", lambda cwd: None)
+    monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
+    assert transcript.discover_transcript(str(tmp_path)) == str(transcript_path)
+    assert (
+        transcript.read_final_text(str(transcript_path), timeout=0.2)
+        == "Ship Cursor slash commands next, then harden auto-speak."
+    )
 
 
 def test_reads_antigravity_planner_response(tmp_path):

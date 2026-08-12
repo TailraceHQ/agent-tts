@@ -5,7 +5,8 @@ status (completed|aborted|error), hook_event_name.
 
 Transcript lines are role-nested JSONL
 (``{"role":"assistant","message":{"content":[...]}}``), plus roleless status
-lines such as ``{"type":"turn_ended"}``. On-disk discovery uses
+lines such as ``{"type":"turn_ended"}``. The shared reader prefers text-only
+assistant finals over ``text``+``tool_use`` preambles. On-disk discovery uses
 ``~/.cursor/projects/<slug>/agent-transcripts/`` when replaying without a
 hook-supplied path.
 """

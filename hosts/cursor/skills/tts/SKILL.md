@@ -1,0 +1,22 @@
+---
+name: tts
+description: >-
+  Control shared agent TTS playback (on/off/summary/full/replay/stop/preview/status/voices/wpm/backend).
+  Use when the user asks to enable, disable, replay, stop, or configure TTS.
+disable-model-invocation: true
+---
+
+Run the checkout CLI and relay stdout to the user **verbatim** (no commentary):
+
+```bash
+"REPLACE_WITH_CHECKOUT/scripts/run" "REPLACE_WITH_CHECKOUT/scripts/tts_reader/cli.py" <args>
+```
+
+Replace `<args>` with the user's subcommand and arguments (for example `replay full`, `stop`, `status`, `on`).
+
+Useful subcommands: `on`, `off`, `summary`, `full`, `stop`, `status`, `voices`,
+`replay`, `replay full`, `preview`, `wpm <n>`, `voice prose|header <name>`,
+`backend <auto|macos|windows|linux|cloud>`.
+
+Config is shared under `~/.agent-tts/` (or the legacy `~/.claude/claude-code-tts/`
+path when that is still in use). TTS starts disabled; run `on` once.
