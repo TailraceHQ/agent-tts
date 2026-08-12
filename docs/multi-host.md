@@ -50,12 +50,13 @@ and Google Antigravity adapters share one daemon, config, and sanitizer.
   `scripts/tts_reader/hook.py` (unchanged install via `--plugin-dir`).
 - **Cursor:** run `hosts/cursor/install.sh` (merge-safe write to
   `~/.cursor/hooks.json` with absolute checkout paths), or merge
-  `hosts/cursor/hooks.json` manually. Entry: `hook_cursor.py`. See
-  `hosts/cursor/README.md`.
+  `hosts/cursor/hooks.json` manually. Entry: `hook_cursor.py`.
+  **Install + usage:** [hosts/cursor/README.md](../hosts/cursor/README.md).
 - **Antigravity:** preferred `agy plugin install <repo-root>` using root
   `plugin.json` / `hooks.json` / `skills/` (Stop → `hosts/antigravity/run`).
   Subdir install: `hosts/antigravity/install.sh` writes `.tts_root` so `run`
-  finds `scripts/` without `AGENT_TTS_ROOT`. See `hosts/antigravity/README.md`.
+  finds `scripts/` without `AGENT_TTS_ROOT`.
+  **Install + usage:** [hosts/antigravity/README.md](../hosts/antigravity/README.md).
 
 ## Known limitations
 
