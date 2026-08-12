@@ -1,6 +1,6 @@
 [project]
 name = "agent-tts"
-version = "0.1.0"
+version = "0.2.0"
 description = "Speak agent responses aloud on macOS, Windows, and Linux (Claude Code, Cursor, Antigravity), with optional cloud voices."
 readme = "README.md"
 license = { text = "MIT" }
