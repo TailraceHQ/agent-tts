@@ -174,7 +174,8 @@ git clone <repository-url> ~/src/claude-code-tts
 ```
 
 `install.sh` merge-safely writes absolute checkout paths into
-`~/.cursor/hooks.json`. Details: [hosts/cursor/README.md](hosts/cursor/README.md).
+`~/.cursor/hooks.json`. Full install, CLI usage, and uninstall notes:
+[hosts/cursor/README.md](hosts/cursor/README.md).
 
 ### Antigravity
 
@@ -186,8 +187,8 @@ agy plugin install /absolute/path/to/claude-code-tts
 ```
 
 Or `hosts/antigravity/install.sh subdir` (writes a `.tts_root` marker so the
-`run` shim finds `scripts/` without `AGENT_TTS_ROOT`).
-Details: [hosts/antigravity/README.md](hosts/antigravity/README.md).
+`run` shim finds `scripts/` without `AGENT_TTS_ROOT`). Full install, `/tts`
+usage, and uninstall notes: [hosts/antigravity/README.md](hosts/antigravity/README.md).
 
 ## Voice quality (macOS)
 
