@@ -1,7 +1,11 @@
 # agent-tts
 
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.9+-3776AB?logo=python&logoColor=white)](pyproject.toml)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-host-191919)](docs/multi-host.md)
+[![Cursor](https://img.shields.io/badge/Cursor-host-000000)](hosts/cursor/README.md)
+[![Antigravity](https://img.shields.io/badge/Antigravity-host-4285F4)](hosts/antigravity/README.md)
 [![License: MIT](https://img.shields.io/github/license/TailraceHQ/agent-tts)](LICENSE)
-[![Downloads](https://img.shields.io/github/downloads/TailraceHQ/agent-tts/total)](https://github.com/TailraceHQ/agent-tts/releases)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/agent-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/agent-tts/actions/workflows/test.yml)
 
 A cross-platform plugin that reads an agent's completed responses aloud on
@@ -396,6 +400,8 @@ The next response starts the updated daemon automatically.
    ```
 
 ## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, guidelines, and pull requests.
 
 Clone the repository, create a virtual environment, and install the test
 dependency:
