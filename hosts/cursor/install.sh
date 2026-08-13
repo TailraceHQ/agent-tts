@@ -8,5 +8,7 @@ if [ -n "${CURSOR_HOOKS_FILE:-}" ]; then
   exec "$ROOT/scripts/run" "$ROOT/scripts/tts_reader/cursor_install.py" \
     --checkout "$ROOT" --hooks-file "$CURSOR_HOOKS_FILE" "$@"
 fi
-exec "$ROOT/scripts/run" "$ROOT/scripts/tts_reader/cursor_install.py" \
+"$ROOT/scripts/run" "$ROOT/scripts/tts_reader/cursor_install.py" \
   --checkout "$ROOT" "$@"
+# Direct CLI on PATH so tts stop/skip/pause skip the agent round-trip.
+"$ROOT/scripts/install-cli.sh" || true

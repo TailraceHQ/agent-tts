@@ -88,9 +88,14 @@ you only need to enable it once.
 | `/tts on` | Enable automatic speech after completed responses |
 | `/tts off` | Disable future automatic speech, stop current playback, and clear the queue |
 | `/tts summary` | Speak only the first prose paragraph (default) |
+| `/tts closing` | Speak only the last prose paragraph (usually the actual answer) |
+| `/tts brief` | Speak the first sentence of the lead paragraph |
 | `/tts full` | Speak the entire cleaned response |
-| `/tts replay [full\|summary]` | Replay the latest response for the current working directory, optionally overriding the configured mode for just this replay |
+| `/tts replay [summary\|closing\|brief\|full]` | Replay the latest response for the current working directory, optionally overriding the configured mode for just this replay |
 | `/tts stop` | Stop current playback and clear the queue |
+| `/tts skip` | Skip the current utterance and continue the rest of this response |
+| `/tts pause` | Pause playback |
+| `/tts resume` | Continue a paused response from the next utterance |
 | `/tts preview` | Print exactly what would be spoken, including voice assignments, without playing audio |
 | `/tts voice prose <name>` | Select the voice used for normal prose |
 | `/tts voice header <name>` | Select a second voice for headings and blockquotes |
@@ -109,9 +114,41 @@ Voice names may contain spaces:
 /tts voice prose Samantha
 /tts voice header Daniel
 /tts wpm 190
-/tts full
+/tts closing
 /tts preview
 ```
+
+Slash commands still go through the agent, so they are slow for `stop` / `skip` /
+`pause`. Prefer the [direct CLI](#direct-cli-hotkeys) for those.
+
+## Direct CLI (hotkeys)
+
+`scripts/tts` talks to the daemon directly. Put it on your PATH so you can
+control playback without waiting on a model:
+
+```bash
+~/src/agent-tts/scripts/install-cli.sh   # symlink ~/.local/bin/tts
+tts status
+tts stop
+tts skip
+tts pause
+tts resume
+```
+
+Cursor `install.sh` runs that symlink step as well. On Windows, add
+`scripts\tts.cmd` to PATH, or call `scripts\run.cmd scripts\tts_reader\cli.py`.
+
+Raycast Script Command (or any hotkey runner):
+
+```bash
+#!/bin/bash
+# @raycast.title TTS Stop
+# @raycast.mode silent
+"$HOME/.local/bin/tts" stop
+```
+
+Same pattern for `skip`, `pause`, and `resume`. macOS Shortcuts can use **Run
+Shell Script** with the same command.
 
 ## Configuration
 
@@ -296,8 +333,11 @@ Before playback, the sanitizer:
 - assigns headings and blockquotes to the header voice; and
 - emits each list item as a separate utterance.
 
-In summary mode, only the first prose paragraph is spoken. If there is no prose
-paragraph, the first available block is used.
+In summary mode, only the first prose paragraph is spoken. Closing mode uses the
+last prose paragraph instead. Brief mode speaks the first sentence of the lead
+paragraph. If there is no prose paragraph, the first (or last, for closing)
+available block is used. Turns that are only a code/table pointer or shorter
+than three words stay silent.
 
 ## Multiple sessions and channels
 
@@ -438,6 +478,8 @@ hosts/cursor/                Cursor hooks + install.sh + /tts command + skill
 hosts/antigravity/           Antigravity scaffold + run/install shims
 docs/multi-host.md           Multi-host decisions and status
 scripts/run, scripts/run.cmd   Cross-platform Python launcher (finds python3/python/py)
+scripts/tts, scripts/tts.cmd   Direct CLI (no agent); install-cli.sh → ~/.local/bin/tts
+scripts/install-cli.sh         Symlink `tts` onto PATH
 scripts/tts_reader/
   adapters/                  Host Stop-payload → SpeakRequest mappers
   sanitize.py                Markdown to utterance queue

@@ -62,21 +62,36 @@ After install, in Agent chat:
 /tts off
 ```
 
-The command runs this checkout’s CLI and relays stdout verbatim.
+The command runs this checkout’s CLI and relays stdout verbatim. For `stop`,
+`skip`, `pause`, and `resume`, use the direct CLI below — slash commands wait
+on the model.
 
 ### CLI (same entry point)
 
 ```bash
+# after install.sh, or: ~/src/agent-tts/scripts/install-cli.sh
+tts on
+tts closing     # last paragraph (usually the answer)
+tts skip
+tts pause
+tts resume
+```
+
+```bash
 CHECKOUT=~/src/agent-tts
-TTS="$CHECKOUT/scripts/run $CHECKOUT/scripts/tts_reader/cli.py"
+TTS="$CHECKOUT/scripts/tts"
 
 $TTS on          # enable automatic speech after completed turns
 $TTS off         # disable + stop playback
 $TTS summary     # speak lead paragraph only (default)
+$TTS closing     # speak last paragraph only
+$TTS brief       # speak first sentence
 $TTS full        # speak the whole cleaned response
 $TTS replay      # replay latest transcript for this cwd
 $TTS replay full # one-shot full replay
 $TTS stop        # stop current playback / clear queue
+$TTS skip        # skip current utterance, continue this response
+$TTS pause       # hold playback; $TTS resume continues
 $TTS preview     # print what would be spoken (no audio)
 $TTS status      # show active config
 $TTS voices      # list selectable voices

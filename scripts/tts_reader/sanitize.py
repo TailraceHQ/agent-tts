@@ -16,10 +16,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 PROSE = "prose"
 HEADER = "header"
+
+# Spoken stubs the sanitizer emits instead of reading a code block or table.
+# A turn that is *only* these pointers is treated as junk and stays silent.
+_POINTER_TEXTS = frozenset({"see codeblock below", "see table below"})
+_MIN_SPEAK_WORDS = 3
+_BRIEF_MAX_WORDS = 20
+_SENTENCE_RE = re.compile(r".+?[.!?]")
 
 # Word / extension pronunciation overrides. Seeded from the spec examples
 # (``modes.py:12`` -> "mode dot pi, line 12"). This is intentionally a plain
@@ -242,22 +249,68 @@ def _parse_blocks(md: str, pron: dict) -> List[_Block]:
 # --------------------------------------------------------------------------
 
 
+def _first_sentence(text: str, max_words: int = _BRIEF_MAX_WORDS) -> str:
+    """First sentence of ``text``, capped at ``max_words``."""
+    text = (text or "").strip()
+    if not text:
+        return ""
+    m = _SENTENCE_RE.match(text)
+    chunk = m.group(0).strip() if m else text
+    words = chunk.split()
+    if len(words) > max_words:
+        return " ".join(words[:max_words])
+    return chunk
+
+
+def _is_junk(utterances: List[Utterance]) -> bool:
+    """True when the queue is empty, pointer-only, or shorter than a real reply."""
+    texts = [u.text.strip() for u in utterances if u.text and u.text.strip()]
+    if not texts:
+        return True
+    stripped = [re.sub(r"[.!?]+$", "", t.lower()).strip() for t in texts]
+    if all(s in _POINTER_TEXTS for s in stripped):
+        return True
+    return sum(len(t.split()) for t in texts) < _MIN_SPEAK_WORDS
+
+
+def _lead_block(blocks: List[_Block]) -> Optional[_Block]:
+    for b in blocks:
+        if b.kind == "paragraph":
+            return b
+    return blocks[0] if blocks else None
+
+
 def sanitize(markdown: str, mode: str = "full", pron: dict | None = None) -> List[Utterance]:
     """Convert a markdown response into an utterance queue.
 
     ``mode="full"``    -> every block.
     ``mode="summary"`` -> only the lead paragraph (first prose paragraph block).
+    ``mode="closing"`` -> only the last prose paragraph (the usual answer).
+    ``mode="brief"``   -> first sentence of the lead paragraph, capped at 20 words.
+    Pointer-only or very short queues are dropped so they are never spoken.
     """
     pron = pron or DEFAULT_PRONUNCIATION
     blocks = _parse_blocks(markdown or "", pron)
 
     if mode == "summary":
+        lead = _lead_block(blocks)
+        out = list(lead.utterances) if lead else []
+    elif mode == "closing":
+        paras = [b for b in blocks if b.kind == "paragraph"]
+        chosen = paras[-1] if paras else (blocks[-1] if blocks else None)
+        out = list(chosen.utterances) if chosen else []
+    elif mode == "brief":
+        lead = _lead_block(blocks)
+        if not lead or not lead.utterances:
+            out = []
+        else:
+            text = " ".join(u.text for u in lead.utterances)
+            sentence = _first_sentence(text)
+            voice = lead.utterances[0].voice
+            out = [Utterance(voice, sentence)] if sentence else []
+    else:
+        out = []
         for b in blocks:
-            if b.kind == "paragraph":
-                return list(b.utterances)
-        return list(blocks[0].utterances) if blocks else []
+            out.extend(b.utterances)
 
-    out: List[Utterance] = []
-    for b in blocks:
-        out.extend(b.utterances)
-    return out
+    return [] if _is_junk(out) else out

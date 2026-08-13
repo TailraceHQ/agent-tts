@@ -179,6 +179,13 @@ def test_handle_request_dispatch(harness):
     assert d.handle_request({"type": "bogus"})["ok"] is False
     status = d.handle_request({"type": "status"})
     assert status["ok"] is True and "queued" in status
+    assert status.get("paused") is False
+    skip = d.handle_request({"type": "skip"})
+    assert skip["ok"] is True and skip["skipped"] is False
+    pause = d.handle_request({"type": "pause"})
+    assert pause["ok"] is True and pause["paused"] is False
+    resume = d.handle_request({"type": "resume"})
+    assert resume["ok"] is True and resume["resumed"] is False
 
 
 def test_inline_text_skips_transcript_read(harness, monkeypatch):
@@ -202,6 +209,29 @@ def test_inline_text_skips_transcript_read(harness, monkeypatch):
     _settle(spoken)
     assert calls == []
     assert any(t.startswith("inline-body") for _, t in spoken)
+
+
+def test_skip_advances_to_later_utterances(harness):
+    d, spoken = harness
+    d.submit(_job("S", D.AUTO, "job"))
+    time.sleep(0.08)
+    assert d.skip() is True
+    _settle(spoken)
+    texts = [t for _, t in spoken]
+    assert any(t.startswith("job-1") or t.startswith("job-2") for t in texts)
+
+
+def test_pause_holds_and_resume_continues(harness):
+    d, spoken = harness
+    d.submit(_job("S", D.AUTO, "job"))
+    time.sleep(0.08)
+    assert d.pause() is True
+    paused_at = len(spoken)
+    time.sleep(0.25)
+    assert len(spoken) == paused_at, "paused job must not keep speaking"
+    assert d.resume() is True
+    _settle(spoken)
+    assert len(spoken) > paused_at
 
 
 def test_empty_inline_text_falls_back_to_transcript(harness):

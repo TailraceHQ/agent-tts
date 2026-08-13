@@ -34,6 +34,13 @@ def test_summary_full_sets_mode():
     assert config.load_config()["mode"] == "summary"
 
 
+def test_closing_and_brief_set_mode():
+    cli.main(["closing"])
+    assert config.load_config()["mode"] == "closing"
+    cli.main(["brief"])
+    assert config.load_config()["mode"] == "brief"
+
+
 def test_voice_sets_prose_and_header():
     cli.main(["voice", "prose", "Alex"])
     cli.main(["voice", "header", "Samantha"])
@@ -76,6 +83,14 @@ def test_replay_full_overrides_configured_mode(monkeypatch, captured_sends):
     assert captured_sends[-1]["mode"] == "full"
 
 
+def test_replay_closing_overrides_configured_mode(monkeypatch, captured_sends):
+    monkeypatch.setattr(transcript, "discover_transcript",
+                        lambda cwd: "/fake/session.jsonl")
+    config.set_values(mode="summary")
+    cli.main(["replay", "closing"])
+    assert captured_sends[-1]["mode"] == "closing"
+
+
 def test_replay_summary_overrides_configured_mode(monkeypatch, captured_sends):
     monkeypatch.setattr(transcript, "discover_transcript",
                         lambda cwd: "/fake/session.jsonl")
@@ -103,6 +118,21 @@ def test_replay_rejects_bad_mode_arg(monkeypatch, capsys, captured_sends):
 def test_stop_sends_stop_request(captured_sends):
     cli.main(["stop"])
     assert captured_sends[-1]["type"] == "stop"
+
+
+def test_skip_pause_resume_send_daemon_requests(captured_sends):
+    cli.main(["skip"])
+    assert captured_sends[-1]["type"] == "skip"
+    cli.main(["pause"])
+    assert captured_sends[-1]["type"] == "pause"
+    cli.main(["resume"])
+    assert captured_sends[-1]["type"] == "resume"
+
+
+def test_skip_when_daemon_down_is_idle(monkeypatch, capsys):
+    monkeypatch.setattr(client, "send", lambda *a, **k: None)
+    cli.main(["skip"])
+    assert "not speaking" in capsys.readouterr().out.lower()
 
 
 def test_preview_prints_queue_without_speaking(monkeypatch, capsys):
@@ -182,7 +212,8 @@ def test_no_args_prints_usage(capsys):
 
 
 @pytest.mark.parametrize("argv", [
-    ["on"], ["off"], ["summary"], ["full"], ["stop"], ["status"], ["migrate"],
+    ["on"], ["off"], ["summary"], ["closing"], ["brief"], ["full"],
+    ["stop"], ["skip"], ["pause"], ["resume"], ["status"], ["migrate"],
     ["wpm", "180"], ["voice", "prose", "Alex"],
 ])
 def test_every_command_marks_suppression(argv, capsys):
