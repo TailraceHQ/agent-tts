@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.png" alt="Tailrace: Agent-TTS — Look away. Stay in the loop" />
+</p>
+
 # agent-tts
 
 [![Version](https://img.shields.io/badge/version-0.2.0-blue)](pyproject.toml)

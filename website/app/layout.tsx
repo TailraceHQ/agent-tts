@@ -23,6 +23,14 @@ export const metadata: Metadata = {
   description:
     "Speak completed Claude Code, Cursor, and Antigravity responses aloud. Summary, closing, brief, or full — without watching the screen.",
   applicationName: "agent-tts",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export default function Layout({ children }: LayoutProps<"/">) {
