@@ -1,0 +1,80 @@
+---
+title: Choose what to speak
+description: Summary, closing, brief, and full select different slices of the same agent turn. Junk turns stay silent.
+---
+
+The sanitizer turns Markdown into an utterance queue, then the mode keeps a slice of that queue. Toggle a mode on the same sample turn:
+
+<SpeakPreview />
+
+## Why summary is often the wrong paragraph
+
+Agents usually open with a plan ("I'll check the adapter") and close with the result ("The tests are green"). Summary speaks the **first** prose paragraph, so you hear the plan. Closing speaks the **last** prose paragraph, so you hear the result.
+
+```bash
+tts closing
+```
+
+<Callout type="info">
+  Mode is global for the data directory (`~/.agent-tts/config.json`). Every session sharing that directory uses the same mode.
+</Callout>
+
+## What each mode keeps
+
+Given this turn:
+
+````md
+# Fix the Stop hook timeout
+
+I'll check the Cursor adapter and the shared runner. Then I'll raise the timeout and add a test.
+
+The stop hook currently times out at 10 seconds…
+
+> Keep the hook fail-open.
+
+    { "timeout": 90 }
+
+The tests are green. Bind skip to a hotkey next.
+````
+
+| Mode | Spoken | Skipped |
+| --- | --- | --- |
+| **summary** | Lead paragraph ("I'll check…") | Heading, body, quote, code pointer, closing |
+| **closing** | Last paragraph ("The tests are green…") | Everything above it |
+| **brief** | First sentence of the lead paragraph | The rest of that paragraph, and every other block |
+| **full** | Heading, every paragraph, quote, `see codeblock below` | Raw code and table cells (replaced by pointers) |
+
+Replay can override the configured mode for one playback:
+
+```bash
+tts replay closing
+tts replay full
+```
+
+## Voices
+
+Prose and headings can use different system voices:
+
+```bash
+tts voice prose Samantha
+tts voice header Daniel
+```
+
+If [`header_voice`](/docs/reference/config) is unset, headings use the [`prose_voice`](/docs/reference/config) and the distinction is off. Cloud backends use the provider voice id from `tts cloud voice` unless a per-utterance voice is set.
+
+## Turns that stay silent
+
+After sanitizing, the queue is dropped when:
+
+- it is empty
+- every utterance is a pointer (`see codeblock below` / `see table below`)
+- the whole queue is shorter than three words (`Done.`, `OK.`)
+
+<Callout type="info">
+  A one-line "Done." in full mode is silent on purpose. If you need to hear short acks, that threshold is `_MIN_SPEAK_WORDS` in `sanitize.py`.
+</Callout>
+
+## See also
+
+- [Control playback](/docs/guides/control-playback)
+- [Command reference](/docs/reference/commands)

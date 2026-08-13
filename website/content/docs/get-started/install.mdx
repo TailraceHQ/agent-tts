@@ -1,0 +1,77 @@
+---
+title: Install agent-tts
+description: Load the plugin for Claude Code, Cursor, or Antigravity, then enable speech once.
+---
+
+Speech starts **disabled**. You need:
+
+- Python 3.9+
+- A speech engine: `say` on macOS, SAPI on Windows, `espeak-ng` on Linux
+- A clone of this repo
+
+## Claude Code
+
+```bash
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+claude --plugin-dir ~/src/agent-tts
+```
+
+In the session:
+
+```text
+/tts on
+```
+
+To load it every time, wrap `claude` in your shell so `--plugin-dir` is always passed.
+
+## Cursor
+
+```bash
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+~/src/agent-tts/hosts/cursor/install.sh
+```
+
+`install.sh` writes the stop hook into `~/.cursor/hooks.json`, installs `/tts`, and symlinks `tts` to `~/.local/bin/tts`. Then:
+
+```bash
+tts on
+```
+
+Or `/tts on` in Agent chat.
+
+## Antigravity
+
+```bash
+git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
+agy plugin install ~/src/agent-tts
+~/src/agent-tts/hosts/antigravity/run cli on
+```
+
+## Direct CLI
+
+All hosts share `~/.agent-tts/` and the same CLI. After `scripts/install-cli.sh`:
+
+```bash
+tts status
+tts closing
+tts stop
+```
+
+<Callout type="info">
+  `/tts` in chat waits on the model. Use the `tts` binary for stop, skip, pause, and resume.
+</Callout>
+
+## Confirm it works
+
+1. Enable with `tts on`.
+2. Ask the agent a short question.
+3. When the turn completes, you should hear the lead paragraph (summary mode).
+4. Run `tts preview` to print the utterance queue without audio.
+
+If nothing plays, check `~/.agent-tts/debug.log`. TTS failures never block the agent turn.
+
+## See also
+
+- [Choose what to speak](/docs/concepts/modes)
+- [Control playback](/docs/guides/control-playback)
+- [Command reference](/docs/reference/commands)

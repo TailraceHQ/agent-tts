@@ -44,14 +44,12 @@ test ! -f "$data_dir/daemon.pid" || kill "$(cat "$data_dir/daemon.pid")"
 
 ## Project layout
 
-See the Development section of [README.md](README.md) for the full tree.
-High-level map:
-
 | Path | Role |
 | --- | --- |
 | `scripts/tts_reader/` | Shared core (daemon, CLI, sanitizer, engines, adapters) |
 | `hosts/cursor/`, `hosts/antigravity/` | Host packaging and install helpers |
 | `.claude-plugin/`, `hooks/`, `commands/` | Claude Code plugin wiring |
+| `website/` | Fumadocs site (`pnpm --dir website dev`) |
 | `tests/` | Unit tests (no audio required) |
 | `docs/multi-host.md` | Multi-host design notes |
 

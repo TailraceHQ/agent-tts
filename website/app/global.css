@@ -1,0 +1,24 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --tts-accent: #0f6b6b;
+  --tts-accent-fg: #f4f7f8;
+  --tts-header: #b54708;
+}
+
+.dark {
+  --tts-accent: #2a9d9d;
+  --tts-accent-fg: #0e1418;
+  --tts-header: #f0a020;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}

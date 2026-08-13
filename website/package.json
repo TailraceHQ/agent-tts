@@ -1,0 +1,35 @@
+{
+  "name": "agent-tts-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "fumadocs-mdx && next dev --webpack",
+    "build": "fumadocs-mdx && next build",
+    "start": "next start",
+    "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "fumadocs-core": "^16.11.3",
+    "fumadocs-mdx": "^15.1.0",
+    "fumadocs-ui": "^16.11.3",
+    "mermaid": "^11.16.0",
+    "next": "16.2.12",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "unist-util-visit": "^5.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
+    "@types/mdast": "^4.0.4",
+    "@types/mdx": "^2.0.13",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "mdast-util-mdx-jsx": "^3.2.0",
+    "postcss": "^8.5.18",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.7.2"
+  }
+}

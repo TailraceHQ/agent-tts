@@ -4,3 +4,6 @@ __pycache__/
 *.egg-info/
 .DS_Store
 hosts/antigravity/.tts_root
+website/node_modules/
+website/.next/
+website/.source/
