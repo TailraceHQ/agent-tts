@@ -11,11 +11,12 @@
 [![Antigravity](https://img.shields.io/badge/Antigravity-host-4285F4)](hosts/antigravity/README.md)
 [![License: MIT](https://img.shields.io/github/license/TailraceHQ/agent-tts)](LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/TailraceHQ/agent-tts/test.yml?branch=main&label=tests)](https://github.com/TailraceHQ/agent-tts/actions/workflows/test.yml)
+[![Docs](https://img.shields.io/badge/docs-agent--tts.dev-6E56CF)](https://agent-tts.dev)
 
 Speaks completed agent responses aloud. Opt-in, stdlib-only, shared config
 under `~/.agent-tts/`.
 
-Full docs (modes, playback, cloud voices): [`website/`](website/).
+Full docs (modes, playback, cloud voices): **[agent-tts.dev](https://agent-tts.dev)**.
 
 ## Compatibility
 
@@ -113,6 +114,6 @@ tts preview
 
 ## More
 
-- [Docs site](website/) — modes, skip/pause, cloud voices, how it works
+- [Docs site (agent-tts.dev)](https://agent-tts.dev) - modes, skip/pause, cloud voices, how it works
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)
