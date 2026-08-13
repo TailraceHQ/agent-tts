@@ -1,0 +1,33 @@
+---
+title: Use a cloud voice
+description: Use ElevenLabs, OpenAI, or Azure instead of the OS speech engine.
+---
+
+Switch the backend to `cloud`, pick a provider and voice, and keep the API key in the environment.
+
+```bash
+tts backend cloud
+tts cloud provider elevenlabs
+tts cloud voice 21m00Tcm4TlvDq8ikWAM
+```
+
+Each utterance is synthesized over HTTPS and played locally (`afplay` on macOS; `ffplay` / `mpg123` / `aplay` / `paplay` on Linux; PowerShell media APIs on Windows).
+
+| Provider | `provider` | Voice id example | Key |
+| --- | --- | --- | --- |
+| ElevenLabs | `elevenlabs` | `21m00Tcm4TlvDq8ikWAM` (Rachel) | `ELEVENLABS_API_KEY` |
+| OpenAI | `openai` | `alloy`, `nova`, … | `OPENAI_API_KEY` |
+| Azure | `azure` | `en-US-JennyNeural` | `AZURE_SPEECH_KEY` plus `tts cloud region` |
+
+`tts voices` lists ElevenLabs voices when a key is set. OpenAI `tts wpm` maps to the API `speed` parameter.
+
+<Callout type="info">
+  Prefer the environment variable over [`tts cloud key`](/docs/reference/commands#voice-and-engine) so the key never lands in [`config.json`](/docs/reference/config). A missing key or failed request stays silent for that turn - check `~/.agent-tts/debug.log`.
+</Callout>
+
+On macOS, quality of the **local** backend comes from voices in System Settings → Accessibility → Spoken Content. Siri voices are not selectable by name through `say`. Leave `prose_voice` null and set the system voice to try that path.
+
+## See also
+
+- [Configuration](/docs/reference/config)
+- [Command reference](/docs/reference/commands)

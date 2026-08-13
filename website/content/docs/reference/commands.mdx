@@ -1,0 +1,69 @@
+---
+title: tts commands
+description: Every subcommand on the shared CLI. Slash /tts and the tts binary call the same entry point.
+---
+
+```bash
+tts <subcommand> [args...]
+```
+
+Config lives in `~/.agent-tts/config.json`. Playback commands talk to the daemon over loopback TCP.
+
+## Enablement
+
+| Command | Effect |
+| --- | --- |
+| `tts on` | Enable automatic speech after completed turns |
+| `tts off` | Disable, stop playback, clear the queue |
+
+## Modes
+
+| Command | Effect |
+| --- | --- |
+| `tts summary` | First prose paragraph (default) |
+| `tts closing` | Last prose paragraph |
+| `tts brief` | First sentence of the lead paragraph |
+| `tts full` | Entire cleaned response |
+
+See [Choose what to speak](/docs/concepts/modes).
+
+## Playback
+
+| Command | Effect |
+| --- | --- |
+| `tts stop` | Interrupt current playback and clear queued jobs |
+| `tts skip` | Skip the current utterance group, continue this response |
+| `tts pause` | Hold this response after cutting the current group |
+| `tts resume` | Continue a paused response |
+| `tts replay [mode]` | Replay the latest turn for this working directory |
+| `tts preview` | Print the utterance queue without speaking |
+
+`replay` accepts `summary`, `closing`, `brief`, or `full`. Without an argument it uses the configured mode.
+
+## Voice and engine
+
+| Command | Effect |
+| --- | --- |
+| `tts voice prose <name>` | Prose voice |
+| `tts voice header <name>` | Heading / blockquote voice |
+| `tts wpm <n>` | Rate in words per minute |
+| `tts voices` | List voices for the active backend |
+| `tts backend <auto\|macos\|windows\|linux\|cloud>` | Speech engine |
+| `tts cloud provider <elevenlabs\|openai\|azure>` | Cloud vendor |
+| `tts cloud voice <id>` | Provider voice id |
+| `tts cloud key <api-key>` | Stored key (env var preferred) |
+| `tts cloud region <region>` | Azure region |
+
+Prefer `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, or `AZURE_SPEECH_KEY` over `tts cloud key`.
+
+## Status
+
+| Command | Effect |
+| --- | --- |
+| `tts status` | Print enabled, mode, voices, backend, data dir |
+| `tts migrate` | Copy legacy `~/.claude/claude-code-tts` into `~/.agent-tts` |
+
+## See also
+
+- [Install](/docs/get-started/install)
+- [Control playback](/docs/guides/control-playback)

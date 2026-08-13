@@ -1,0 +1,60 @@
+---
+title: config.json
+description: ~/.agent-tts/config.json, data directory layout, and cloud keys.
+---
+
+Config is shared by every host that uses the same data directory. Change it with `tts` / `/tts` rather than editing the file when you can.
+
+```json
+{
+  "enabled": false,
+  "mode": "summary",
+  "prose_voice": null,
+  "header_voice": null,
+  "wpm": 175,
+  "backend": "auto",
+  "cloud": {
+    "provider": "elevenlabs",
+    "voice": null,
+    "api_key": null,
+    "region": null
+  }
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `enabled` | Automatic speech after completed turns |
+| `mode` | `summary`, `closing`, `brief`, or `full` |
+| `prose_voice` | `null` = backend default |
+| `header_voice` | `null` = same as prose (dual-voice off) |
+| `wpm` | Speaking rate |
+| `backend` | `auto`, `macos`, `windows`, `linux`, `cloud` |
+| `cloud` | Provider settings; ignored unless `backend` is `cloud` |
+
+There is no reset-voice command. Set `prose_voice` or `header_voice` back to `null` in `config.json`.
+
+## Data directory
+
+```text
+~/.agent-tts/
+  config.json
+  last_speak.json
+  daemon.log
+  daemon.pid
+  daemon.port
+  debug.log
+  audio/
+```
+
+Override with `AGENT_TTS_DATA_DIR`. The path is not derived from `$CLAUDE_PLUGIN_DATA` - Claude Code only injects that into hook subprocesses, not the `/tts` slash command, so two directories would desync enablement.
+
+If `~/.agent-tts` is missing and `~/.claude/claude-code-tts` exists, the legacy dir is copied in (skipping live daemon pid/port/log). `tts migrate` does that explicitly. `tts status` prints `data_dir`.
+
+The daemon exits after 30 idle minutes and starts again on the next speak.
+
+## See also
+
+- [Cloud voices](/docs/guides/cloud-voices)
+- [Choose what to speak](/docs/concepts/modes)
+- [Command reference](/docs/reference/commands)
