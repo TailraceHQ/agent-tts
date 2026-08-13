@@ -1,0 +1,5 @@
+#!/bin/sh
+# Direct CLI entry point: talks to the daemon without going through an agent.
+# Install onto PATH with scripts/install-cli.sh (symlink ~/.local/bin/tts).
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+exec "$HERE/run" "$HERE/tts_reader/cli.py" "$@"

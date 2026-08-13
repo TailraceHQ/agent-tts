@@ -83,6 +83,8 @@ class Daemon:
         self.active: Optional[Job] = None
         self.active_proc = None
         self.abort_active = False
+        self.skip_active = False
+        self.paused = False
         self.last_speaking_session: Optional[str] = None
         self.running = True
         self.last_activity = time.time()
@@ -115,6 +117,8 @@ class Daemon:
                     and self.active.session_id == job.session_id
                 )
                 if interrupted:
+                    self.paused = False
+                    self.skip_active = False
                     self._kill_active_locked()
                 if dropped or interrupted:
                     config.debug_log(
@@ -131,16 +135,53 @@ class Daemon:
         """Interrupt current playback + drop this session's queued work."""
         with self.cv:
             self.last_activity = time.time()
+            self.paused = False
+            self.skip_active = False
             if self.active and (session_id is None or self.active.session_id == session_id):
                 self._kill_active_locked()
             self.pending = deque(
                 j for j in self.pending
                 if session_id is not None and j.session_id != session_id
             )
-            self.cv.notify()
+            self.cv.notify_all()
 
-    def _kill_active_locked(self) -> None:
-        self.abort_active = True
+    def skip(self) -> bool:
+        """Cut the current utterance group and continue the rest of the job."""
+        with self.cv:
+            if not self.active:
+                return False
+            self.last_activity = time.time()
+            self.skip_active = True
+            self._kill_active_locked(abort=False)
+            self.cv.notify_all()
+            return True
+
+    def pause(self) -> bool:
+        """Stop the current utterance and hold the rest of this job."""
+        with self.cv:
+            if not self.active:
+                return False
+            self.last_activity = time.time()
+            self.paused = True
+            self._kill_active_locked(abort=False)
+            self.cv.notify_all()
+            return True
+
+    def resume(self) -> bool:
+        """Continue a paused job from the next remaining utterance group."""
+        with self.cv:
+            if not self.paused:
+                return False
+            self.last_activity = time.time()
+            self.paused = False
+            self.cv.notify_all()
+            return True
+
+    def _kill_active_locked(self, *, abort: bool = True) -> None:
+        if abort:
+            self.abort_active = True
+            self.paused = False
+            self.skip_active = False
         if self.active_proc and self.active_proc.poll() is None:
             try:
                 self.active_proc.terminate()
@@ -219,17 +260,48 @@ class Daemon:
                 announce = f"{label} speaking."
         if announce:
             self._speak_blocking(backend, announce, prose_voice, wpm)
+            with self.lock:
+                # Skip during the session label only cuts the announcement.
+                self.skip_active = False
             time.sleep(VOICE_SWITCH_PAUSE)  # let the announcement's audio drain
 
-        for i, (voice, group_text) in enumerate(
-            _group_by_voice(utterances, prose_voice, header_voice)
-        ):
+        groups = _group_by_voice(utterances, prose_voice, header_voice)
+        i = 0
+        while i < len(groups):
+            with self.cv:
+                while self.paused and self.running and not self.abort_active:
+                    if self.skip_active:
+                        break
+                    self.cv.wait(timeout=1.0)
+                if not self.running or self.abort_active:
+                    break
+                if self.skip_active:
+                    self.skip_active = False
+                    i += 1
+                    continue
+            if i > 0:
+                time.sleep(VOICE_SWITCH_PAUSE)  # let the prior group's audio drain
             with self.lock:
                 if self.abort_active:
                     break
-            if i > 0:
-                time.sleep(VOICE_SWITCH_PAUSE)  # let the prior group's audio drain
+                if self.paused:
+                    continue
+                if self.skip_active:
+                    self.skip_active = False
+                    i += 1
+                    continue
+            voice, group_text = groups[i]
             self._speak_blocking(backend, group_text, voice, wpm)
+            with self.lock:
+                if self.abort_active:
+                    break
+                skipped = self.skip_active
+                self.skip_active = False
+                if skipped or self.paused:
+                    # Current group was cut off; resume/continue at the next one.
+                    i += 1
+                    continue
+            i += 1
 
     def player_loop(self) -> None:
         while True:
@@ -246,6 +318,8 @@ class Daemon:
                 job = self.pending.popleft()
                 self.active = job
                 self.abort_active = False
+                self.skip_active = False
+                self.paused = False
             try:
                 self._play(job)
             except Exception:  # never let one bad job kill the player
@@ -253,6 +327,8 @@ class Daemon:
             with self.lock:
                 self.active = None
                 self.active_proc = None
+                self.paused = False
+                self.skip_active = False
                 self.last_activity = time.time()
 
     # -- control socket ---------------------------------------------------
@@ -279,6 +355,12 @@ class Daemon:
         if t == "stop":
             self.stop(req.get("session_id"))
             return {"ok": True, "stopped": True}
+        if t == "skip":
+            return {"ok": True, "skipped": self.skip()}
+        if t == "pause":
+            return {"ok": True, "paused": self.pause()}
+        if t == "resume":
+            return {"ok": True, "resumed": self.resume()}
         if t == "status":
             with self.lock:
                 return {
@@ -286,6 +368,7 @@ class Daemon:
                     "active": self.active.session_id if self.active else None,
                     "channel": self.active.channel if self.active else None,
                     "queued": len(self.pending),
+                    "paused": self.paused,
                 }
         if t == "shutdown":
             with self.cv:

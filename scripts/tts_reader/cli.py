@@ -3,9 +3,9 @@
 Invoked by the slash command as:
     python3 .../cli.py <subcommand> [args...]
 
-Config changes (on/off/summary/full/voice/wpm) just edit the JSON config and
-print a one-line confirmation. replay/stop talk to the daemon. preview renders
-the utterance queue locally without speaking - the debugging workhorse.
+Config changes (on/off/summary/closing/brief/full/voice/wpm) just edit the JSON
+config and print a one-line confirmation. replay/stop/skip/pause/resume talk
+to the daemon. preview renders the utterance queue locally without speaking.
 """
 
 from __future__ import annotations
@@ -21,12 +21,13 @@ from tts_reader.daemon import AUTO, REPLAY  # noqa: E402
 from tts_reader.sanitize import sanitize  # noqa: E402
 
 USAGE = (
-    "usage: /tts <on|off|summary|full|replay [full|summary]|stop|preview|"
-    "status|migrate|voices|voice prose|header <name>|wpm <n>|"
-    "backend <auto|macos|windows|linux|cloud>|"
+    "usage: tts <on|off|summary|closing|brief|full|replay [mode]|stop|skip|"
+    "pause|resume|preview|status|migrate|voices|voice prose|header <name>|"
+    "wpm <n>|backend <auto|macos|windows|linux|cloud>|"
     "cloud <provider|voice|key|region> <value>>"
 )
 
+MODES = ("summary", "closing", "brief", "full")
 BACKENDS = ("auto", "macos", "windows", "linux", "cloud")
 CLOUD_PROVIDERS = ("elevenlabs", "openai", "azure")
 
@@ -52,9 +53,19 @@ def cmd_summary(_):
     return "Mode: summary (lead paragraph only)."
 
 
+def cmd_closing(_):
+    config.set_values(mode="closing")
+    return "Mode: closing (last paragraph only)."
+
+
+def cmd_brief(_):
+    config.set_values(mode="brief")
+    return "Mode: brief (first sentence of the lead paragraph)."
+
+
 def cmd_full(_):
     config.set_values(mode="full")
-    return "Mode: full (whole response)."
+    return "Mode: full (whole cleaned response)."
 
 
 def cmd_stop(_):
@@ -62,9 +73,43 @@ def cmd_stop(_):
     return "Playback stopped."
 
 
+def _daemon_control(kind: str, ok_key: str, idle: str, done: str) -> str:
+    resp = client.send({"type": kind, "session_id": None}, autostart=False)
+    if not resp or not resp.get(ok_key):
+        return idle
+    return done
+
+
+def cmd_skip(_):
+    return _daemon_control(
+        "skip",
+        "skipped",
+        "Nothing to skip: TTS is not speaking.",
+        "Skipped current utterance.",
+    )
+
+
+def cmd_pause(_):
+    return _daemon_control(
+        "pause",
+        "paused",
+        "Nothing to pause: TTS is not speaking.",
+        "Paused.",
+    )
+
+
+def cmd_resume(_):
+    return _daemon_control(
+        "resume",
+        "resumed",
+        "Nothing to resume: TTS is not paused.",
+        "Resumed.",
+    )
+
+
 def cmd_replay(args):
-    if args and args[0] not in ("full", "summary"):
-        return "usage: /tts replay [full|summary]"
+    if args and args[0] not in MODES:
+        return f"usage: tts replay [{' | '.join(MODES)}]"
     path = _current_transcript()
     if not path:
         return "Nothing to replay: no transcript found for this session."
@@ -203,8 +248,13 @@ COMMANDS = {
     "on": cmd_on,
     "off": cmd_off,
     "summary": cmd_summary,
+    "closing": cmd_closing,
+    "brief": cmd_brief,
     "full": cmd_full,
     "stop": cmd_stop,
+    "skip": cmd_skip,
+    "pause": cmd_pause,
+    "resume": cmd_resume,
     "replay": cmd_replay,
     "voice": cmd_voice,
     "wpm": cmd_wpm,

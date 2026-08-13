@@ -127,6 +127,45 @@ def test_summary_skips_leading_heading():
     assert utts[0].text == "First real paragraph."
 
 
+def test_closing_is_last_paragraph_only():
+    md = "# Title\n\nI will look at the file.\n\nThe tests are green now.\n"
+    assert spoken(md, "closing") == ["The tests are green now."]
+
+
+def test_closing_falls_back_to_last_block_without_paragraph():
+    md = "# Only a heading\n\n```python\nprint(1)\n```\n"
+    # heading + pointer; last paragraph is absent so last block is the pointer,
+    # which is junk and stays silent.
+    assert spoken(md, "closing") == []
+
+
+def test_brief_is_first_sentence_of_lead():
+    md = "I checked the hook. Then I rewrote the daemon. Finally tests.\n"
+    assert spoken(md, "brief") == ["I checked the hook."]
+
+
+def test_brief_caps_long_sentence():
+    words = " ".join(f"w{i}" for i in range(30))
+    assert spoken(words, "brief") == [" ".join(f"w{i}" for i in range(20))]
+
+
+def test_pointer_only_turn_is_silent():
+    md = "```python\nprint('x')\n```\n"
+    assert spoken(md, "full") == []
+
+
+def test_short_ack_is_silent():
+    assert spoken("Done.", "full") == []
+    assert spoken("OK.", "summary") == []
+
+
+def test_code_plus_prose_still_speaks_prose():
+    md = "Here is the approach I took.\n\n```python\nprint('x')\n```\n"
+    texts = spoken(md, "full")
+    assert any("approach" in t for t in texts)
+    assert "see codeblock below" in texts
+
+
 # ---- ordering / voice tagging end-to-end --------------------------------
 
 

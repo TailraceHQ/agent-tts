@@ -79,10 +79,15 @@ After plugin install, Antigravity’s `skills/tts` wraps the CLI:
 /tts on
 /tts off
 /tts summary
+/tts closing
+/tts brief
 /tts full
 /tts replay
 /tts replay full
 /tts stop
+/tts skip
+/tts pause
+/tts resume
 /tts preview
 /tts status
 /tts voices

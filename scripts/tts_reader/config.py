@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 DEFAULT_CONFIG = {
     "enabled": False,       # opt-in: nothing speaks until `/tts on`
-    "mode": "summary",      # "summary" (lead paragraph) or "full"
+    "mode": "summary",      # summary | closing | brief | full
     "prose_voice": None,    # None -> system default voice
     "header_voice": None,   # None -> fall back to prose voice (dual-voice off)
     "wpm": 175,             # words per minute
