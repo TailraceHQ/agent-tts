@@ -1,9 +1,24 @@
 ---
 title: Troubleshooting
-description: Silent playback, cloud HTTPS certificate errors, and where to look when nothing speaks.
+description: Session-only --plugin-dir, silent playback, cloud HTTPS certificate errors, and where to look when nothing speaks.
 ---
 
 TTS failures never block an agent turn. If speech is missing, start with `tts status` and `~/.agent-tts/debug.log`.
+
+## TTS disappears when I close Claude Code
+
+`claude --plugin-dir ~/src/agent-tts` is **session-only**. It lasts until you quit.
+
+To keep TTS installed between sessions:
+
+```bash
+~/src/agent-tts/hosts/claude/install.sh
+# or:
+claude plugin marketplace add ~/src/agent-tts --scope user
+claude plugin install tts@tailrace -s user
+```
+
+Then start Claude with no `--plugin-dir`. See [Install](/docs/get-started/install).
 
 ## Cloud voices stay silent (CERTIFICATE_VERIFY_FAILED)
 

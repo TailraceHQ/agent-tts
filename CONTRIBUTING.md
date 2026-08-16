@@ -27,16 +27,18 @@ Python 3.9 and 3.12 (see `.github/workflows/test.yml`).
 
 ### Manual smoke test
 
+Keep TTS installed between sessions with `hosts/claude/install.sh`. For a one-off
+session while iterating (gone when you quit):
+
 ```bash
 claude --plugin-dir "$PWD"
 ```
 
-That flag is session-only. For everyday use, `hosts/claude/install.sh` registers
-`tts@tailrace` at user scope. After changing plugin files, run
-`claude plugin update tts@tailrace` (or keep using `--plugin-dir` while iterating).
+After changing installed plugin files, run `claude plugin update tts@tailrace`
+(or keep using `--plugin-dir` for that session only).
 
-Then `/tts on`, ask a question, and check `/tts preview`, `/tts status`, and
-`/tts replay`. Logs live under `~/.agent-tts/` (`daemon.log`, `debug.log`).
+Then `/tts:tts on`, ask a question, and check `/tts:tts preview`, `/tts:tts status`,
+and `/tts:tts replay`. Logs live under `~/.agent-tts/` (`daemon.log`, `debug.log`).
 
 The player daemon is detached from the host process. After changing daemon
 code, stop it so the next speak starts a fresh process:

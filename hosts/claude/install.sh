@@ -14,5 +14,6 @@ claude plugin marketplace add "$ROOT" --scope user
 claude plugin install tts@tailrace -s user
 "$ROOT/scripts/install-cli.sh" || true
 echo "TTS plugin enabled for every Claude Code session (tts@tailrace)."
+echo "This is the lasting install. claude --plugin-dir lasts only until you quit."
 echo "After pulling plugin changes: claude plugin update tts@tailrace"
 echo "Then in a session: /tts:tts on"

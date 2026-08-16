@@ -52,8 +52,9 @@ one daemon, config (`~/.agent-tts/`), and sanitizer.
 
 ## Packaging
 
-- **Claude Code:** `hosts/claude/install.sh` registers the checkout as user-scope
-  `tts@tailrace` (marketplace add + plugin install). `--plugin-dir` is session-only.
+- **Claude Code:** `hosts/claude/install.sh` registers user-scope `tts@tailrace`
+  so the plugin loads in every session. `claude --plugin-dir` is session-only
+  (gone when you quit). **Install + usage:** [hosts/claude/README.md](../hosts/claude/README.md).
 - **Cursor:** run `hosts/cursor/install.sh` (merge-safe write to
   `~/.cursor/hooks.json`, plus `~/.cursor/commands/tts.md` and
   `~/.cursor/skills/tts/SKILL.md` with absolute checkout paths), or merge
