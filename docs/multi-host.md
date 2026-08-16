@@ -52,8 +52,8 @@ one daemon, config (`~/.agent-tts/`), and sanitizer.
 
 ## Packaging
 
-- **Claude Code:** repo root `.claude-plugin/`, `hooks/hooks.json`, `commands/tts.md`,
-  `scripts/tts_reader/hook.py` (unchanged install via `--plugin-dir`).
+- **Claude Code:** `hosts/claude/install.sh` registers the checkout as user-scope
+  `tts@tailrace` (marketplace add + plugin install). `--plugin-dir` is session-only.
 - **Cursor:** run `hosts/cursor/install.sh` (merge-safe write to
   `~/.cursor/hooks.json`, plus `~/.cursor/commands/tts.md` and
   `~/.cursor/skills/tts/SKILL.md` with absolute checkout paths), or merge
