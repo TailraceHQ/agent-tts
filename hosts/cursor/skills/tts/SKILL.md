@@ -17,7 +17,9 @@ Replace `<args>` with the user's subcommand and arguments (for example `replay f
 Useful subcommands: `on`, `off`, `summary`, `closing`, `brief`, `full`, `stop`,
 `skip`, `pause`, `resume`, `status`, `voices`, `replay`, `replay full`,
 `preview`, `wpm <n>`, `voice prose|header <name>`,
-`backend <auto|macos|windows|linux|cloud>`.
+`backend <auto|macos|windows|linux|cloud>`,
+`setup`, `cloud [setup]`,
+`cloud <provider|voice|key|env|region> <value>`.
 
 Config is shared under `~/.agent-tts/`. If you still have the legacy
 `~/.claude/claude-code-tts/` directory, run `migrate` once (or let the first

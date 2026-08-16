@@ -19,7 +19,8 @@ Subcommands: `on`, `off`, `summary`, `closing`, `brief`, `full`,
 `replay [summary|closing|brief|full]`, `stop`, `skip`, `pause`, `resume`,
 `preview`, `status`, `voices`, `voice prose|header <name>`, `wpm <n>`,
 `backend <auto|macos|windows|linux|cloud>`,
-`cloud <provider|voice|key|region> <value>`.
+`setup`, `cloud [setup]`,
+`cloud <provider|voice|key|env|region> <value>`.
 
 Relay the CLI output to the user verbatim. Config lives under `~/.agent-tts/`
 and is shared with Claude Code / Cursor. Starts disabled — use `on` once.

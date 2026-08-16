@@ -13,16 +13,18 @@ Speech starts **disabled**. You need:
 
 ```bash
 git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
-claude --plugin-dir ~/src/agent-tts
+~/src/agent-tts/hosts/claude/install.sh
 ```
 
-In the session:
+`install.sh` adds this checkout as a Claude Code marketplace and enables `tts@tailrace` for your user account. It survives closing the session. `claude --plugin-dir` does **not** — that flag only lasts until you quit.
+
+In a new session:
 
 ```text
-/tts on
+/tts:tts on
 ```
 
-To load it every time, wrap `claude` in your shell so `--plugin-dir` is always passed.
+After `git pull` of plugin changes: `claude plugin update tts@tailrace`.
 
 ## Cursor
 
@@ -68,10 +70,11 @@ tts stop
 3. When the turn completes, you should hear the lead paragraph (summary mode).
 4. Run `tts preview` to print the utterance queue without audio.
 
-If nothing plays, check `~/.agent-tts/debug.log`. TTS failures never block the agent turn.
+If nothing plays, check `~/.agent-tts/debug.log`. TTS failures never block the agent turn. Cloud HTTPS certificate errors on python.org macOS are covered in [Troubleshooting](/docs/guides/troubleshooting).
 
 ## See also
 
 - [Choose what to speak](/docs/concepts/modes)
 - [Control playback](/docs/guides/control-playback)
 - [Command reference](/docs/reference/commands)
+- [Troubleshooting](/docs/guides/troubleshooting)

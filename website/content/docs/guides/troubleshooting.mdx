@@ -1,0 +1,47 @@
+---
+title: Troubleshooting
+description: Silent playback, cloud HTTPS certificate errors, and where to look when nothing speaks.
+---
+
+TTS failures never block an agent turn. If speech is missing, start with `tts status` and `~/.agent-tts/debug.log`.
+
+## Cloud voices stay silent (CERTIFICATE_VERIFY_FAILED)
+
+The python.org macOS installer ships OpenSSL **without** a CA bundle until you run **Install Certificates.command**. Cloud calls to OpenAI, ElevenLabs, or Azure then fail with `CERTIFICATE_VERIFY_FAILED`. That error is swallowed on purpose (so a TTS miss cannot break the turn) and only lands in `~/.agent-tts/debug.log` as `cloud_ssl_error`.
+
+agent-tts tries to recover automatically: it loads `certifi` if that package is installed, then `SSL_CERT_FILE`, then a system CA file, then (on macOS) the SystemRootCertificates keychain. If `tts status` still prints `warning: no CA certificates`, fix the interpreter the **daemon** uses:
+
+```bash
+# python.org macOS (pick your version folder)
+open "/Applications/Python 3.13/Install Certificates.command"
+# or:
+python3 -m pip install certifi
+```
+
+Then restart the daemon so it picks up the new store:
+
+```bash
+test ! -f ~/.agent-tts/daemon.pid || kill "$(cat ~/.agent-tts/daemon.pid)"
+```
+
+`tts status` shows which Python-facing key env is set. Confirm it with the same interpreter:
+
+```bash
+python3 -c "import ssl; print(ssl.get_default_verify_paths())"
+python3 -c "import urllib.request; urllib.request.urlopen('https://api.openai.com')"
+```
+
+Homebrew and Apple `/usr/bin/python3` usually already have CAs. If `scripts/run` selected python.org `python3` first on `PATH`, that is the process that must have certificates.
+
+## Nothing speaks (any backend)
+
+1. `tts status` — `enabled` must be `true`.
+2. `tts preview` — confirms there is an utterance queue for this directory.
+3. `~/.agent-tts/debug.log` — `cloud_no_key`, `cloud_http_error`, and `cloud_ssl_error` are the usual cloud misses.
+4. After changing env vars or certificates, kill the daemon (command above). It starts again on the next speak.
+
+## See also
+
+- [Use a cloud voice](/docs/guides/cloud-voices)
+- [Configuration](/docs/reference/config)
+- [Command reference](/docs/reference/commands)

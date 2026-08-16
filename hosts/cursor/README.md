@@ -99,9 +99,10 @@ $TTS voice prose Samantha
 $TTS voice header Fred
 $TTS wpm 180
 $TTS backend auto   # or macos | windows | linux | cloud
+$TTS setup          # cloud provider wizard (needs a terminal)
 ```
 
-Cloud voice options match the main README (`cloud provider|voice|key|region`).
+Cloud voice options match the main README (`cloud setup|provider|voice|key|env|region`).
 
 ### When speech runs
 
