@@ -34,6 +34,7 @@ DEFAULT_CONFIG = {
         "provider": "elevenlabs",  # elevenlabs | openai | azure
         "voice": None,             # provider voice id
         "api_key": None,           # optional; env var preferred (see engine/cloud.py)
+        "api_key_env": None,       # custom env var name; default per provider
         "region": None,            # azure only
     },
 }

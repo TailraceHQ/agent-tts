@@ -3,31 +3,46 @@ title: Use a cloud voice
 description: Use ElevenLabs, OpenAI, or Azure instead of the OS speech engine.
 ---
 
-Switch the backend to `cloud`, pick a provider and voice, and keep the API key in the environment.
+Run the setup wizard in a terminal. It asks which provider to use (or Off to disable cloud) and which environment variable holds the API key — any name, not just the vendor default.
+
+```bash
+tts setup
+# same as: tts cloud setup
+```
+
+Keys: **space** selects the radio, **enter** saves, **↑/↓** move. **Go back** and **Exit** sit at the bottom of every list.
+
+The wizard never writes the secret into [`config.json`](/docs/reference/config). It stores the env var *name* in `cloud.api_key_env`.
+
+Non-interactive equivalent, including a custom key name:
 
 ```bash
 tts backend cloud
-tts cloud provider elevenlabs
-tts cloud voice 21m00Tcm4TlvDq8ikWAM
+tts cloud provider openai
+tts cloud env OPEN_AI_ALLOY_VOICE_KEY
 ```
 
 Each utterance is synthesized over HTTPS and played locally (`afplay` on macOS; `ffplay` / `mpg123` / `aplay` / `paplay` on Linux; PowerShell media APIs on Windows).
 
-| Provider | `provider` | Voice id example | Key |
+| Provider | `provider` | Voice id example | Default env var |
 | --- | --- | --- | --- |
 | ElevenLabs | `elevenlabs` | `21m00Tcm4TlvDq8ikWAM` (Rachel) | `ELEVENLABS_API_KEY` |
 | OpenAI | `openai` | `alloy`, `nova`, … | `OPENAI_API_KEY` |
 | Azure | `azure` | `en-US-JennyNeural` | `AZURE_SPEECH_KEY` plus `tts cloud region` |
+| Off | `tts backend auto` | OS voice | — |
 
 `tts voices` lists ElevenLabs voices when a key is set. OpenAI `tts wpm` maps to the API `speed` parameter.
 
 <Callout type="info">
-  Prefer the environment variable over [`tts cloud key`](/docs/reference/commands#voice-and-engine) so the key never lands in [`config.json`](/docs/reference/config). A missing key or failed request stays silent for that turn - check `~/.agent-tts/debug.log`.
+  Prefer `tts cloud env YOUR_VAR_NAME` over [`tts cloud key`](/docs/reference/commands#voice-and-engine) so the secret never lands in [`config.json`](/docs/reference/config). A missing key or failed request stays silent for that turn - check `~/.agent-tts/debug.log`. Slash-command `/tts setup` is not interactive; run the `tts` binary in a terminal.
 </Callout>
 
 On macOS, quality of the **local** backend comes from voices in System Settings → Accessibility → Spoken Content. Siri voices are not selectable by name through `say`. Leave `prose_voice` null and set the system voice to try that path.
+
+Cloud requests that fail TLS (`CERTIFICATE_VERIFY_FAILED`) stay silent. python.org macOS Pythons need a CA bundle — see [Troubleshooting](/docs/guides/troubleshooting).
 
 ## See also
 
 - [Configuration](/docs/reference/config)
 - [Command reference](/docs/reference/commands)
+- [Troubleshooting](/docs/guides/troubleshooting)

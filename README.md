@@ -35,10 +35,12 @@ Clone once. Speech starts **disabled** — run `on` after install.
 
 ```bash
 git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
-claude --plugin-dir ~/src/agent-tts
+~/src/agent-tts/hosts/claude/install.sh
 ```
 
-Then `/tts on`. To load it every time, add `--plugin-dir` to your `claude` wrapper.
+That registers the checkout as a **user-scope** plugin (`tts@tailrace`) so it loads in every session. `--plugin-dir` only lasts until you quit.
+
+Then `/tts:tts on`. After pulling plugin changes: `claude plugin update tts@tailrace`.
 
 **Cursor**
 
@@ -75,6 +77,7 @@ Defaults in `~/.agent-tts/config.json`. Prefer `/tts` or `tts` over editing the 
     "provider": "elevenlabs",
     "voice": null,
     "api_key": null,
+    "api_key_env": null,
     "region": null
   }
 }
@@ -85,7 +88,7 @@ Defaults in `~/.agent-tts/config.json`. Prefer `/tts` or `tts` over editing the 
 | `mode` | `summary` (first paragraph), `closing` (last), `brief` (first sentence), `full` |
 | `backend` | `auto` (OS engine), or `macos` / `windows` / `linux` / `cloud` |
 | `prose_voice` / `header_voice` | `null` = system default; header falls back to prose |
-| `cloud` | Used only when `backend` is `cloud`. Prefer `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, or `AZURE_SPEECH_KEY` over storing `api_key` |
+| `cloud` | Used only when `backend` is `cloud`. Set `api_key_env` to any env var name (for example `OPEN_AI_ALLOY_VOICE_KEY`). Prefer that over storing `api_key`. Defaults: `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, `AZURE_SPEECH_KEY`. |
 
 Override the data dir with `AGENT_TTS_DATA_DIR`. Legacy `~/.claude/claude-code-tts` is copied into `~/.agent-tts` on first use (`tts migrate`).
 
@@ -103,7 +106,8 @@ Override the data dir with `AGENT_TTS_DATA_DIR`. Legacy `~/.claude/claude-code-t
 | `voice prose\|header <name>` | Select voices |
 | `wpm <n>` | Speaking rate |
 | `backend <auto\|macos\|windows\|linux\|cloud>` | Speech engine |
-| `cloud <provider\|voice\|key\|region> <value>` | Cloud voice settings |
+| `setup` / `cloud setup` | Interactive cloud provider + API key env wizard |
+| `cloud <provider\|voice\|key\|env\|region> <value>` | Cloud voice settings |
 | `migrate` | Copy legacy Claude data dir into `~/.agent-tts` |
 
 ```text
@@ -115,5 +119,6 @@ tts preview
 ## More
 
 - [Docs site (agent-tts.dev)](https://agent-tts.dev) - modes, skip/pause, cloud voices, how it works
+- [Troubleshooting](https://agent-tts.dev/docs/guides/troubleshooting) - silent cloud audio, `CERTIFICATE_VERIFY_FAILED`
 - [Contributing](CONTRIBUTING.md)
 - [License](LICENSE)

@@ -189,6 +189,30 @@ def test_status_shows_backend_and_cloud(capsys):
     assert "data_dir=" in out
 
 
+def test_cloud_env_sets_custom_var_name(capsys):
+    cli.main(["cloud", "env", "OPEN_AI_ALLOY_VOICE_KEY"])
+    out = capsys.readouterr().out
+    assert "OPEN_AI_ALLOY_VOICE_KEY" in out
+    assert config.load_config()["cloud"]["api_key_env"] == "OPEN_AI_ALLOY_VOICE_KEY"
+
+
+def test_cloud_env_rejects_invalid_name(capsys):
+    cli.main(["cloud", "env", "not a var"])
+    assert "invalid env var name" in capsys.readouterr().out.lower()
+    assert config.load_config()["cloud"]["api_key_env"] is None
+
+
+def test_status_shows_named_env(capsys, monkeypatch):
+    monkeypatch.setenv("OPEN_AI_ALLOY_VOICE_KEY", "secret")
+    cli.main(["backend", "cloud"])
+    cli.main(["cloud", "provider", "openai"])
+    cli.main(["cloud", "env", "OPEN_AI_ALLOY_VOICE_KEY"])
+    cli.main(["status"])
+    out = capsys.readouterr().out
+    assert "api_key=env:OPEN_AI_ALLOY_VOICE_KEY" in out
+    assert "secret" not in out
+
+
 def test_migrate_reports_no_legacy(capsys, monkeypatch, tmp_path):
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -209,6 +233,7 @@ def test_no_args_prints_usage(capsys):
     out = capsys.readouterr().out.lower()
     assert "usage" in out
     assert "migrate" in out
+    assert "setup" in out
 
 
 @pytest.mark.parametrize("argv", [

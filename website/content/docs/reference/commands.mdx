@@ -49,12 +49,14 @@ See [Choose what to speak](/docs/concepts/modes).
 | `tts wpm <n>` | Rate in words per minute |
 | `tts voices` | List voices for the active backend |
 | `tts backend <auto\|macos\|windows\|linux\|cloud>` | Speech engine |
+| `tts setup` / `tts cloud setup` | Interactive provider + API key env wizard |
 | `tts cloud provider <elevenlabs\|openai\|azure>` | Cloud vendor |
 | `tts cloud voice <id>` | Provider voice id |
+| `tts cloud env <VAR_NAME>` | Env var that holds the API key (any name) |
 | `tts cloud key <api-key>` | Stored key (env var preferred) |
 | `tts cloud region <region>` | Azure region |
 
-Prefer `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, or `AZURE_SPEECH_KEY` over `tts cloud key`.
+Prefer `tts cloud env YOUR_VAR_NAME` (for example `OPEN_AI_ALLOY_VOICE_KEY`) over `tts cloud key`. Vendor defaults are `ELEVENLABS_API_KEY`, `OPENAI_API_KEY`, and `AZURE_SPEECH_KEY`. The wizard needs a real terminal; `/tts setup` in chat is not interactive.
 
 ## Status
 

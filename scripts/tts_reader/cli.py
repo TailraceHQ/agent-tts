@@ -23,8 +23,8 @@ from tts_reader.sanitize import sanitize  # noqa: E402
 USAGE = (
     "usage: tts <on|off|summary|closing|brief|full|replay [mode]|stop|skip|"
     "pause|resume|preview|status|migrate|voices|voice prose|header <name>|"
-    "wpm <n>|backend <auto|macos|windows|linux|cloud>|"
-    "cloud <provider|voice|key|region> <value>>"
+    "wpm <n>|backend <auto|macos|windows|linux|cloud>|setup|"
+    "cloud [setup]|cloud <provider|voice|key|env|region> <value>>"
 )
 
 MODES = ("summary", "closing", "brief", "full")
@@ -149,12 +149,21 @@ def cmd_backend(args):
     return f"Backend set to {args[0]}."
 
 
+def cmd_setup(_):
+    from tts_reader.cloud_setup import run_wizard
+
+    return run_wizard()
+
+
 def cmd_cloud(args):
     usage = (
-        "usage: /tts cloud <provider|voice|key|region> <value>\n"
+        "usage: /tts cloud [setup]\n"
+        "       /tts cloud <provider|voice|key|env|region> <value>\n"
         f"  provider: {' | '.join(CLOUD_PROVIDERS)}"
     )
-    if len(args) < 2 or args[0] not in ("provider", "voice", "key", "region"):
+    if not args or args[0] in ("setup", "wizard"):
+        return cmd_setup([])
+    if len(args) < 2 or args[0] not in ("provider", "voice", "key", "env", "region"):
         return usage
     field, value = args[0], " ".join(args[1:])
     if field == "provider":
@@ -162,6 +171,16 @@ def cmd_cloud(args):
             return f"unknown provider {value!r}. choose: {', '.join(CLOUD_PROVIDERS)}"
         config.set_cloud_values(provider=value)
         return f"Cloud provider set to {value}."
+    if field == "env":
+        from tts_reader.engine.cloud import valid_env_name
+
+        if not valid_env_name(value):
+            return (
+                f"invalid env var name {value!r}. "
+                "use letters, digits, and underscores."
+            )
+        config.set_cloud_values(api_key_env=value)
+        return f"Cloud API key env var set to {value}."
     key = {"voice": "voice", "key": "api_key", "region": "region"}[field]
     config.set_cloud_values(**{key: value})
     shown = "(hidden)" if field == "key" else value
@@ -191,12 +210,17 @@ def cmd_status(_):
         f"data_dir={config.data_dir()}",
     ]
     if cfg.get("backend") == "cloud":
+        from tts_reader.engine.cloud import key_source, ssl_status_warning
+
         cl = cfg.get("cloud", {})
-        has_key = "yes" if cl.get("api_key") else "env/none"
         lines.append(
             f"cloud: provider={cl.get('provider')}  "
-            f"voice={cl.get('voice') or '(provider default)'}  api_key={has_key}"
+            f"voice={cl.get('voice') or '(provider default)'}  "
+            f"api_key={key_source(cl)}"
         )
+        warn = ssl_status_warning()
+        if warn:
+            lines.append(warn)
     return "\n".join(lines)
 
 
@@ -263,6 +287,7 @@ COMMANDS = {
     "preview": cmd_preview,
     "backend": cmd_backend,
     "cloud": cmd_cloud,
+    "setup": cmd_setup,
     "migrate": cmd_migrate,
 }
 

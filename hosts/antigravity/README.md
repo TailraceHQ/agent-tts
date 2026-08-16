@@ -118,7 +118,7 @@ CHECKOUT=~/src/agent-tts
 "$CHECKOUT/hosts/antigravity/run" cli stop
 ```
 
-Cloud options match the main README (`cloud provider|voice|key|region`).
+Cloud options match the main README (`cloud setup|provider|voice|key|env|region`).
 
 ### When speech runs
 

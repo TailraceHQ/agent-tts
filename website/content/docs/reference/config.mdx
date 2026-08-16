@@ -17,6 +17,7 @@ Config is shared by every host that uses the same data directory. Change it with
     "provider": "elevenlabs",
     "voice": null,
     "api_key": null,
+    "api_key_env": null,
     "region": null
   }
 }
@@ -30,7 +31,7 @@ Config is shared by every host that uses the same data directory. Change it with
 | `header_voice` | `null` = same as prose (dual-voice off) |
 | `wpm` | Speaking rate |
 | `backend` | `auto`, `macos`, `windows`, `linux`, `cloud` |
-| `cloud` | Provider settings; ignored unless `backend` is `cloud` |
+| `cloud` | Provider settings; ignored unless `backend` is `cloud`. `api_key_env` is the env var name to read (any name). |
 
 There is no reset-voice command. Set `prose_voice` or `header_voice` back to `null` in `config.json`.
 
