@@ -1,5 +1,17 @@
 #!/bin/sh
 # Direct CLI entry point: talks to the daemon without going through an agent.
 # Install onto PATH with scripts/install-cli.sh (symlink ~/.local/bin/tts).
-HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+#
+# When invoked via that symlink, $0 is ~/.local/bin/tts. Resolve it so
+# ``run`` and ``tts_reader/`` are found next to this file, not next to the link.
+src=$0
+while [ -L "$src" ]; do
+  dir=$(CDPATH= cd -- "$(dirname "$src")" && pwd)
+  target=$(readlink "$src")
+  case "$target" in
+    /*) src=$target ;;
+    *) src=$dir/$target ;;
+  esac
+done
+HERE=$(CDPATH= cd -- "$(dirname "$src")" && pwd)
 exec "$HERE/run" "$HERE/tts_reader/cli.py" "$@"
