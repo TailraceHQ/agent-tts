@@ -11,20 +11,35 @@ Speech starts **disabled**. You need:
 
 ## Claude Code
 
+### Keep it installed between sessions (recommended)
+
 ```bash
 git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
 ~/src/agent-tts/hosts/claude/install.sh
 ```
 
-`install.sh` adds this checkout as a Claude Code marketplace and enables `tts@tailrace` for your user account. It survives closing the session. `claude --plugin-dir` does **not** — that flag only lasts until you quit.
+Same steps by hand:
 
-In a new session:
+```bash
+claude plugin marketplace add ~/src/agent-tts --scope user
+claude plugin install tts@tailrace -s user
+```
+
+That enables `tts@tailrace` for your user account. It survives closing Claude Code. After `git pull` of plugin changes: `claude plugin update tts@tailrace`.
+
+In any new session:
 
 ```text
 /tts:tts on
 ```
 
-After `git pull` of plugin changes: `claude plugin update tts@tailrace`.
+### This session only (until you quit)
+
+```bash
+claude --plugin-dir ~/src/agent-tts
+```
+
+`--plugin-dir` is temporary. TTS is available in that process only and is gone when you quit. Do not use it as the everyday install.
 
 ## Cursor
 

@@ -33,14 +33,22 @@ Clone once. Speech starts **disabled** — run `on` after install.
 
 **Claude Code**
 
+Keep it installed between sessions (recommended):
+
 ```bash
 git clone https://github.com/TailraceHQ/agent-tts.git ~/src/agent-tts
 ~/src/agent-tts/hosts/claude/install.sh
 ```
 
-That registers the checkout as a **user-scope** plugin (`tts@tailrace`) so it loads in every session. `--plugin-dir` only lasts until you quit.
+That registers `tts@tailrace` for your user account. New Claude sessions load it automatically. After `git pull`: `claude plugin update tts@tailrace`. Then `/tts:tts on`.
 
-Then `/tts:tts on`. After pulling plugin changes: `claude plugin update tts@tailrace`.
+This session only (gone when you quit):
+
+```bash
+claude --plugin-dir ~/src/agent-tts
+```
+
+`--plugin-dir` is temporary. It does not persist across sessions. Use `hosts/claude/install.sh` (or `claude plugin marketplace add` + `claude plugin install tts@tailrace`) to keep TTS installed.
 
 **Cursor**
 
@@ -59,7 +67,7 @@ agy plugin install ~/src/agent-tts
 ```
 
 Direct CLI (no agent round-trip): `scripts/install-cli.sh` → `tts` on `PATH`.
-Host-specific notes: [Cursor](hosts/cursor/README.md), [Antigravity](hosts/antigravity/README.md).
+Host-specific notes: [Claude Code](hosts/claude/README.md), [Cursor](hosts/cursor/README.md), [Antigravity](hosts/antigravity/README.md).
 
 ## Configuration
 
