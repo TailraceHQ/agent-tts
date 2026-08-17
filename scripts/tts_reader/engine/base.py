@@ -20,6 +20,11 @@ class Backend:
     #: Human-facing name, used in ``/tts status`` and error messages.
     name = "base"
 
+    #: Set by ``speak`` right before it returns ``None``, so callers (the
+    #: daemon) can record *why* playback didn't start instead of only logging
+    #: it to debug.log where nobody looks until something is already broken.
+    last_error: Optional[str] = None
+
     def speak(
         self, text: str, voice: Optional[str], wpm: int
     ) -> Optional[subprocess.Popen]:

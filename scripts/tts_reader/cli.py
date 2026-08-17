@@ -213,15 +213,44 @@ def cmd_status(_):
         from tts_reader.engine.cloud import key_source, ssl_status_warning
 
         cl = cfg.get("cloud", {})
+        local_key_source = key_source(cl)
         lines.append(
             f"cloud: provider={cl.get('provider')}  "
             f"voice={cl.get('voice') or '(provider default)'}  "
-            f"api_key={key_source(cl)}"
+            f"api_key={local_key_source}"
         )
         warn = ssl_status_warning()
         if warn:
             lines.append(warn)
+
+    # Ask the *running* daemon for its own view, without starting one just to
+    # check - a daemon spawned before a key was exported keeps running with
+    # that stale environment, so its answer can differ from the one above.
+    daemon_resp = client.send({"type": "status"}, autostart=False)
+    if daemon_resp is None:
+        lines.append("daemon: not running")
+    else:
+        daemon_key_source = daemon_resp.get("cloud_key_source")
+        if daemon_key_source and daemon_key_source != local_key_source:
+            lines.append(
+                f"daemon: running, but sees api_key={daemon_key_source} "
+                "(stale environment - restart the daemon with `tts stop` "
+                "or by killing its process)"
+            )
+        last_error = daemon_resp.get("last_error")
+        if last_error:
+            age = max(0, time.time() - last_error["ts"])
+            lines.append(f"last_error: {last_error['reason']} ({_format_age(age)} ago)")
     return "\n".join(lines)
+
+
+def _format_age(seconds: float) -> str:
+    if seconds < 90:
+        return f"{int(seconds)}s"
+    minutes = seconds / 60
+    if minutes < 90:
+        return f"{int(minutes)}m"
+    return f"{int(minutes / 60)}h"
 
 
 def cmd_migrate(_):
