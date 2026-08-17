@@ -90,6 +90,8 @@ class Daemon:
         self.last_activity = time.time()
         self._seq = 0
         self.token: Optional[str] = None
+        self.last_error: Optional[dict] = None
+        self.last_cfg: Optional[dict] = None
 
     # -- submission / arbitration -----------------------------------------
 
@@ -177,6 +179,12 @@ class Daemon:
             self.cv.notify_all()
             return True
 
+    def _record_error(self, reason: str) -> None:
+        """Remember the last playback failure so ``tts status`` can surface it
+        instead of it only ever showing up in debug.log."""
+        with self.lock:
+            self.last_error = {"ts": time.time(), "reason": reason}
+
     def _kill_active_locked(self, *, abort: bool = True) -> None:
         if abort:
             self.abort_active = True
@@ -201,7 +209,9 @@ class Daemon:
         # for them.
         proc = backend.speak(text, voice, wpm)
         if proc is None:
-            return  # backend spoke nothing (e.g. missing engine / cloud key)
+            # backend spoke nothing (e.g. missing engine / cloud key)
+            self._record_error(backend.last_error or f"{backend.name} backend spoke nothing")
+            return
         with self.lock:
             if self.abort_active:
                 # a stop/supersede landed while we were synthesizing; drop the
@@ -224,6 +234,8 @@ class Daemon:
         if not text:
             text = transcript.read_final_text(job.transcript_path)
         if not text:
+            # Normal, not an error: e.g. a tool-only turn with no prose to
+            # speak. Not recorded as last_error - would be noise in status.
             config.debug_log(
                 "play_no_text",
                 session_id=job.session_id,
@@ -233,6 +245,7 @@ class Daemon:
             )
             return
         cfg = config.load_config()
+        self.last_cfg = cfg  # let `status` reuse this instead of re-reading disk
         backend = engine.get_backend(cfg)
         prose_voice = cfg.get("prose_voice")
         header_voice = cfg.get("header_voice") or prose_voice
@@ -363,13 +376,23 @@ class Daemon:
             return {"ok": True, "resumed": self.resume()}
         if t == "status":
             with self.lock:
-                return {
+                resp = {
                     "ok": True,
                     "active": self.active.session_id if self.active else None,
                     "channel": self.active.channel if self.active else None,
                     "queued": len(self.pending),
                     "paused": self.paused,
+                    "last_error": self.last_error,
                 }
+                # Reuses the config `_play` already loaded for the most recent
+                # job (no disk read here) - resolved inside the daemon process,
+                # so a daemon spawned before an API key was exported shows up
+                # as missing even though a freshly-run CLI command sees it.
+                cfg = self.last_cfg
+                if cfg and cfg.get("backend") == "cloud":
+                    from tts_reader.engine.cloud import key_source
+                    resp["cloud_key_source"] = key_source(cfg.get("cloud", {}))
+            return resp
         if t == "shutdown":
             with self.cv:
                 self.running = False

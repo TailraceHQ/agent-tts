@@ -356,10 +356,13 @@ class CloudBackend(Backend):
         provider = cloud.get("provider", "elevenlabs")
         synth = _SYNTH.get(provider)
         if synth is None:
+            self.last_error = f"unknown cloud provider {provider!r}"
             config.debug_log("cloud_unknown_provider", provider=provider)
             return None
         key = _api_key(provider, cloud)
         if not key:
+            env_name = api_key_env_name(provider, cloud)
+            self.last_error = f"no API key for {provider} (checked {env_name})"
             config.debug_log("cloud_no_key", provider=provider)
             return None
         # explicit per-utterance voice (prose/header) wins over the cloud default
@@ -367,6 +370,7 @@ class CloudBackend(Backend):
 
         result = synth(text, voice_id, wpm, key, cloud)
         if not result:
+            self.last_error = f"{provider} synthesis request failed"
             return None
         audio, ext = result
 
@@ -376,6 +380,7 @@ class CloudBackend(Backend):
             with os.fdopen(fd, "wb") as fh:
                 fh.write(audio)
         except OSError as exc:
+            self.last_error = f"failed to write audio file: {exc}"
             config.debug_log("cloud_write_error", error=repr(exc))
             return None
         return player.play(path)
