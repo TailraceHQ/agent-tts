@@ -385,3 +385,85 @@ def test_discover_falls_through_hosts(monkeypatch):
     )
     monkeypatch.setattr(transcript, "latest_antigravity_transcript", lambda cwd: None)
     assert transcript.discover_transcript("/ws") == "/cursor/t.jsonl"
+
+
+def _prompt(text, ts):
+    return {"type": "user", "timestamp": ts,
+            "message": {"role": "user", "content": text}}
+
+
+def test_current_turn_ignores_previous_turns_answer(tmp_path):
+    """The Stop hook can fire before the turn's final text is flushed. It must
+    wait for it, not speak the previous turn's answer."""
+    path = tmp_path / "t.jsonl"
+    _write(path, [
+        _prompt("first question", "2026-08-08T10:00:00Z"),
+        _assistant("first answer", "2026-08-08T10:00:01Z"),
+        _prompt("second question", "2026-08-08T10:00:02Z"),
+    ])
+
+    def _append_after_delay():
+        time.sleep(0.15)
+        with open(path, "a") as fh:
+            fh.write("\n" + json.dumps(_assistant("second answer", "2026-08-08T10:00:03Z")))
+
+    import threading
+    threading.Thread(target=_append_after_delay).start()
+
+    got = transcript.read_final_text(str(path), timeout=2.0, poll=0.05, current_turn=True)
+    assert got == "second answer"
+
+
+def test_current_turn_waits_past_tool_preamble(tmp_path):
+    path = tmp_path / "t.jsonl"
+    _write(path, [
+        _prompt("question", "2026-08-08T10:00:00Z"),
+        _assistant("Let me check that.", "2026-08-08T10:00:01Z"),
+        _tool_use("2026-08-08T10:00:02Z"),
+        _tool_result("2026-08-08T10:00:03Z"),
+    ])
+
+    def _append_after_delay():
+        time.sleep(0.15)
+        with open(path, "a") as fh:
+            fh.write("\n" + json.dumps(_assistant("Here is the answer.", "2026-08-08T10:00:04Z")))
+
+    import threading
+    threading.Thread(target=_append_after_delay).start()
+
+    got = transcript.read_final_text(str(path), timeout=2.0, poll=0.05, current_turn=True)
+    assert got == "Here is the answer."
+
+
+def test_current_turn_without_text_returns_none_not_old_answer(tmp_path):
+    path = _write(tmp_path / "t.jsonl", [
+        _prompt("first question", "2026-08-08T10:00:00Z"),
+        _assistant("first answer", "2026-08-08T10:00:01Z"),
+        _prompt("second question", "2026-08-08T10:00:02Z"),
+        _tool_use("2026-08-08T10:00:03Z"),
+    ])
+    assert transcript.read_final_text(path, timeout=0.2, current_turn=True) is None
+
+
+def test_current_turn_settled_answer_returns_immediately(tmp_path):
+    path = _write(tmp_path / "t.jsonl", [
+        _prompt("question", "2026-08-08T10:00:00Z"),
+        _assistant("Let me check that.", "2026-08-08T10:00:01Z"),
+        _tool_use("2026-08-08T10:00:02Z"),
+        _tool_result("2026-08-08T10:00:03Z"),
+        _assistant("Here is the answer.", "2026-08-08T10:00:04Z"),
+    ])
+    start = time.time()
+    got = transcript.read_final_text(path, timeout=5.0, poll=0.05, current_turn=True)
+    assert got == "Here is the answer."
+    assert time.time() - start < 0.5
+
+
+def test_replay_still_reads_last_finished_answer(tmp_path):
+    # Replay runs while its own turn has no text yet: it wants the one before.
+    path = _write(tmp_path / "t.jsonl", [
+        _prompt("question", "2026-08-08T10:00:00Z"),
+        _assistant("the answer", "2026-08-08T10:00:01Z"),
+        _prompt("/tts replay", "2026-08-08T10:00:02Z"),
+    ])
+    assert transcript.read_final_text(path, timeout=0.2) == "the answer"

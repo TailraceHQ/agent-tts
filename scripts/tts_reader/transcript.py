@@ -233,7 +233,26 @@ def _assistant_text(obj: dict) -> str:
     return _claude_or_cursor_text(obj)
 
 
-def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
+def _is_claude_prompt(obj: dict) -> bool:
+    """A Claude ``type=user`` line the person typed, not a tool result."""
+    if obj.get("type") != "user":
+        return False
+    msg = obj.get("message")
+    if not isinstance(msg, dict):
+        return False
+    content = msg.get("content")
+    if isinstance(content, str):
+        return True
+    if not isinstance(content, list):
+        return False
+    return not any(
+        isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+    )
+
+
+def _scan_final(
+    path: str, current_turn: bool = False
+) -> Tuple[Optional[str], float, bool]:
     """Return ``(text, timestamp, settled)`` from the transcript file.
 
     For Cursor role-nested JSONL, a turn often emits several assistant lines
@@ -242,7 +261,11 @@ def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
     the latest user line; keep ``settled=False`` while we only have
     tool-accompanied preambles and no ``turn_ended`` yet.
 
-    Claude / Antigravity paths treat any extracted assistant text as settled.
+    Claude / Antigravity paths treat any extracted assistant text as settled,
+    unless ``current_turn``: then only Claude text after the latest prompt
+    counts, and it's settled once no ``tool_use`` follows it. The Stop hook can
+    fire before the turn's final text is flushed, and without this it would
+    read the previous turn's answer (or this turn's tool-call preamble).
     """
     text, ts = None, 0.0
     settled = False
@@ -253,6 +276,8 @@ def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
     turn_final_ts = 0.0
     turn_ended = False
     saw_cursor = False
+    # Claude turn state, for current_turn (reset on each prompt line).
+    claude_open = False  # a tool_use came after the turn's latest text
     try:
         with open(path, "r", encoding="utf-8") as fh:
             for line in fh:
@@ -288,11 +313,20 @@ def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
                         turn_final_text, turn_final_ts = chunk, turn_ts
                     continue
 
+                if current_turn and _is_claude_prompt(obj):
+                    text, ts, settled, claude_open = None, 0.0, False, False
+                    continue
+
                 # Claude / Antigravity (and any non-Cursor assistant shape).
                 t = _assistant_text(obj)
+                has_tool = current_turn and _text_and_tool_use(obj)[1]
                 if t:
                     text, ts = t, _entry_timestamp(obj)
-                    settled = True
+                if has_tool:
+                    claude_open = True
+                elif t:
+                    claude_open = False
+                settled = text is not None and not claude_open
     except OSError:
         return None, 0.0, False
 
@@ -308,7 +342,7 @@ def _scan_final(path: str) -> Tuple[Optional[str], float, bool]:
 
 
 def read_final_text(
-    path: str, timeout: float = 3.0, poll: float = 0.15
+    path: str, timeout: float = 3.0, poll: float = 0.15, current_turn: bool = False
 ) -> Optional[str]:
     """Poll ``path`` until the turn's final assistant text is present.
 
@@ -316,13 +350,17 @@ def read_final_text(
     to disk. The poll loop covers lagging writes and Cursor's multi-step
     assistant lines (wait for a text-only final or ``turn_ended`` when we only
     have tool-accompanied preambles). On timeout, return the best text found.
+
+    ``current_turn`` (the Stop hook) only takes text from the turn after the
+    latest prompt, and waits for it rather than falling back to an earlier
+    turn's. Replay and preview leave it off: they want the last finished answer.
     """
     if not path or not Path(path).exists():
         return None
     deadline = time.time() + timeout
     best: Optional[str] = None
     while True:
-        text, _ts, settled = _scan_final(path)
+        text, _ts, settled = _scan_final(path, current_turn)
         if text:
             best = text
             if settled:

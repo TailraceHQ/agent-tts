@@ -232,7 +232,9 @@ class Daemon:
         # Claude and replay still use the transcript file when text is absent.
         text = job.text.strip() if job.text else None
         if not text:
-            text = transcript.read_final_text(job.transcript_path)
+            text = transcript.read_final_text(
+                job.transcript_path, current_turn=job.channel == AUTO
+            )
         if not text:
             # Normal, not an error: e.g. a tool-only turn with no prose to
             # speak. Not recorded as last_error - would be noise in status.
